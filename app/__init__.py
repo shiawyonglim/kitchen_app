@@ -1,0 +1,2 @@
+"""Personal ERP Modular Monolith."""
+

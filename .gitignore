@@ -218,3 +218,10 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Personal ERP local database & private bank statements
+*.db
+*.db-shm
+*.db-wal
+bank statement example/
+.agents/
