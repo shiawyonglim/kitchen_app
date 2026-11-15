@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 from sqlalchemy import CheckConstraint, DateTime, Float, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.database import Base
+from app.database import Base, get_current_user_id
 
 
 def _utcnow() -> datetime:
@@ -13,11 +13,13 @@ class WorkoutLog(Base):
     """Completed strength or cardio session that feeds Kitchen recovery targets."""
 
     __tablename__ = "workout_logs"
+    __tenant_scoped__ = True
     __table_args__ = (
         CheckConstraint("calories_burned >= 0", name="ck_workout_cal_nonneg"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(Integer, index=True, nullable=False, default=get_current_user_id)
     exercise_type: Mapped[str] = mapped_column(String(64), nullable=False)
     reps: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     distance_km: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)

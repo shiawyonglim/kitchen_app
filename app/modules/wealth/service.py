@@ -54,17 +54,24 @@ from app.modules.wealth.schemas import (
     UpdateEntryRequest,
     WealthSummary,
 )
-from app.modules.wealth.statement_parser import parse_statement_file
+from app.modules.wealth.statement_parser import PdfLockedError, parse_statement_file
 
 
 def _get_holder_names(db: Session) -> str:
-    row = db.get(AppSettings, 1)
+    row = db.scalar(select(AppSettings))
     return row.account_holder_names if row else ""
+
+
+def _resolve_email_provider(db: Session):
+    try:
+        return get_email_provider(db)
+    except TypeError:
+        return get_email_provider()
 
 
 def discover_senders(db: Session, start_date: date, end_date: date) -> list[DiscoveredSender]:
     """Scan inbox headers in the date range and rank money/bank senders above junk."""
-    provider = get_email_provider()
+    provider = _resolve_email_provider(db)
     emails = provider.fetch_messages(start_date=start_date, end_date=end_date, headers_only=True)
 
     active_whitelist = {
@@ -304,7 +311,7 @@ def update_entry(db: Session, entry_id: int, req: UpdateEntryRequest) -> LedgerE
     db.commit()
     db.refresh(entry)
     if req.category is not None:
-        cfg = db.get(AppSettings, 1)
+        cfg = db.scalar(select(AppSettings))
         if cfg is None or cfg.auto_learn_categories:
             from app.modules.wealth import category_model
 
@@ -355,7 +362,7 @@ def sync_whitelisted_transactions(
             mode=settings.email_mode,
         )
 
-    provider = get_email_provider()
+    provider = _resolve_email_provider(db)
     emails = provider.fetch_messages(
         start_date=start_date,
         end_date=end_date,
@@ -369,7 +376,7 @@ def sync_whitelisted_transactions(
         if snap.get("idempotency_hash"):
             existing_hashes.add(snap["idempotency_hash"])
     holder_names = _get_holder_names(db)
-    cat_rules = [(r.name, r.keywords, r.flow_type) for r in db.scalars(select(CategoryRule).order_by(CategoryRule.id.asc())).all()]
+    cat_rules = list(db.scalars(select(CategoryRule).order_by(CategoryRule.id.asc())).all())
     inserted = 0
     skipped_dups = 0
     unparsed = 0
@@ -379,10 +386,56 @@ def sync_whitelisted_transactions(
     model_state = category_model.get_model_state(db)
     model_json = model_state.model_json if model_state and model_state.model_json else None
 
+    def _tng_password_candidates(raw_pw: str | None) -> list[str | None]:
+        cleaned = (raw_pw or "").strip()
+        if not cleaned:
+            return [None]
+        candidates: list[str | None] = [cleaned]
+        digits = re.sub(r"\D", "", cleaned)
+        if digits and digits not in candidates:
+            candidates.append(digits)
+        for prefix in ("60", "0"):
+            if digits.startswith(prefix) and len(digits) > len(prefix):
+                trimmed = digits[len(prefix) :]
+                if trimmed not in candidates:
+                    candidates.append(trimmed)
+        return candidates
+
+    settings_row = db.scalar(select(AppSettings))
+    tng_pw_candidates = _tng_password_candidates(settings_row.tng_pdf_password if settings_row else "")
+
     for raw in emails:
+        handled_attachment = False
+        for att in getattr(raw, "attachments", None) or []:
+            fname_low = (att.filename or "").lower()
+            if not fname_low.endswith((".pdf", ".csv")):
+                continue
+            sender_low = (raw.sender_email or "").lower()
+            subj_low = (raw.subject or "").lower()
+            is_tng_stmt = (
+                "tngdigital.com.my" in sender_low
+                or "tng" in fname_low
+                or "touch 'n go" in (raw.sender_name or "").lower()
+                or ("transaction history" in subj_low and "tng" in (raw.body or "").lower())
+            )
+            if not is_tng_stmt:
+                continue
+            for pw_try in tng_pw_candidates:
+                try:
+                    stmt_res = backfill_from_statement(db, att.filename, att.data, "Touch 'n Go", pdf_password=pw_try)
+                    inserted += stmt_res.inserted_count
+                    skipped_dups += stmt_res.skipped_duplicates
+                    handled_attachment = True
+                    break
+                except PdfLockedError:
+                    continue
+                except Exception:
+                    break
+
         parsed_list = parse_transaction_emails(raw)
         if not parsed_list:
-            unparsed += 1
+            if not handled_attachment:
+                unparsed += 1
             continue
         for parsed in parsed_list:
             if parsed.idempotency_hash in existing_hashes:
@@ -392,12 +445,26 @@ def sync_whitelisted_transactions(
             existing_hashes.add(parsed.idempotency_hash)
             acct = infer_account_name(parsed.sender_email, parsed.subject, parsed.merchant)
             self_tx = is_self_transfer_match(parsed.merchant, parsed.subject, holder_names)
-            matched_rule = match_category_rule_with_flow(f"{parsed.merchant} {parsed.subject} {parsed.sender_email}", cat_rules)
+            matched_rule = match_category_rule_with_flow(
+                f"{parsed.merchant} {parsed.subject} {parsed.sender_email}",
+                cat_rules,
+                occurred_at=raw.received_at,
+                amount_myr=parsed.amount_myr,
+                tx_type=parsed.tx_type,
+                account_name=acct,
+            )
             cat = matched_rule[0] if matched_rule else parsed.category
             tx_type = matched_rule[1] if (matched_rule and matched_rule[1] in ("income", "repayment", "expense")) else parsed.tx_type
-            if model_json and not self_tx and cat in ("General", "Bank / Retail"):
+            if not matched_rule and model_json and not self_tx and cat in ("General", "Bank / Retail"):
                 pred_cat, _conf = category_model.predict_category(
-                    model_json, parsed.merchant, parsed.subject, raw.sender_email, acct, tx_type
+                    model_json,
+                    parsed.merchant,
+                    parsed.subject,
+                    raw.sender_email,
+                    acct,
+                    tx_type,
+                    amount_myr=parsed.amount_myr,
+                    occurred_at=raw.received_at,
                 )
                 if pred_cat:
                     cat = pred_cat
@@ -446,7 +513,7 @@ def backfill_from_statement(
         if snap.get("idempotency_hash"):
             existing_hashes.add(snap["idempotency_hash"])
     holder_names = _get_holder_names(db)
-    cat_rules = [(r.name, r.keywords, r.flow_type) for r in db.scalars(select(CategoryRule).order_by(CategoryRule.id.asc())).all()]
+    cat_rules = list(db.scalars(select(CategoryRule).order_by(CategoryRule.id.asc())).all())
     inserted = 0
     skipped = 0
 
@@ -457,7 +524,14 @@ def backfill_from_statement(
         existing_hashes.add(tx.idempotency_hash)
         subj = f"[{bank_name} Statement] {tx.description}"
         self_tx = is_self_transfer_match(tx.merchant, subj, holder_names)
-        matched_rule = match_category_rule_with_flow(f"{tx.merchant} {subj}", cat_rules)
+        matched_rule = match_category_rule_with_flow(
+            f"{tx.merchant} {subj}",
+            cat_rules,
+            occurred_at=tx.occurred_at,
+            amount_myr=tx.amount_myr,
+            tx_type=tx.tx_type,
+            account_name=bank_name,
+        )
         cat = matched_rule[0] if matched_rule else tx.category
         tx_type = matched_rule[1] if (matched_rule and matched_rule[1] in ("income", "repayment", "expense")) else tx.tx_type
         db.add(
@@ -515,7 +589,7 @@ def add_manual_entry(db: Session, req: ManualLedgerRequest) -> LedgerEntry:
     db.commit()
     db.refresh(entry)
     if req.category is not None:
-        cfg = db.get(AppSettings, 1)
+        cfg = db.scalar(select(AppSettings))
         if cfg is None or cfg.auto_learn_categories:
             from app.modules.wealth import category_model
 
@@ -782,17 +856,33 @@ def list_category_rules(db: Session) -> list[CategoryRule]:
 def upsert_category_rule(db: Session, req: CategoryRuleUpsertRequest) -> CategoryRule:
     clean_name = req.name.strip()
     clean_kw = ", ".join(k.strip() for k in req.keywords.split(",") if k.strip())
+    clean_color = (req.color or "").strip().upper()
+    clean_acct = (req.account_filter or "").strip()
     existing = db.scalar(select(CategoryRule).where(CategoryRule.name == clean_name))
     if existing:
         existing.keywords = clean_kw
         existing.flow_type = req.flow_type
         existing.monthly_budget_myr = req.monthly_budget_myr
+        existing.color = clean_color
+        existing.day_min = req.day_min
+        existing.day_max = req.day_max
+        existing.amount_min = req.amount_min
+        existing.amount_max = req.amount_max
+        existing.tx_direction = req.tx_direction
+        existing.account_filter = clean_acct
     else:
         existing = CategoryRule(
             name=clean_name,
             keywords=clean_kw,
             flow_type=req.flow_type,
             monthly_budget_myr=req.monthly_budget_myr,
+            color=clean_color,
+            day_min=req.day_min,
+            day_max=req.day_max,
+            amount_min=req.amount_min,
+            amount_max=req.amount_max,
+            tx_direction=req.tx_direction,
+            account_filter=clean_acct,
         )
         db.add(existing)
     db.commit()
@@ -902,15 +992,38 @@ def resolve_conflict_group(db: Session, req: ResolveConflictRequest) -> dict[str
     return {"kept": kept, "deleted": deleted}
 
 
+_BRAND_NOISE = {
+    "cardissuance",
+    "payment",
+    "tngow3my1",
+    "duitnow",
+    "transfer",
+    "pos",
+    "debit",
+    "card",
+    "void",
+    "reversal",
+    "refund",
+}
+
+
 def _brand_key(merchant: str) -> str:
-    tokens = re.findall(r"[a-z0-9]{3,}", (merchant or "").lower())
+    low = (merchant or "").lower()
+    for brand in ("grab", "setel", "shopee", "lazada", "foodpanda", "google"):
+        if re.search(rf"\b{brand}\b|(?<![a-z]){brand}\*", low):
+            return brand
+    tokens = [
+        t
+        for t in re.findall(r"[a-z0-9]{3,}", low)
+        if t not in _BRAND_NOISE and not t.isdigit()
+    ]
     return tokens[0] if tokens else ""
 
 
 def reconcile_ledger_entries(db: Session) -> dict[str, int]:
     """Clean up internal TNG pocket transfers, fix legacy misclassified directions, and re-tag self-transfers & categories."""
     holder_names = _get_holder_names(db)
-    cat_rules = [(r.name, r.keywords, r.flow_type) for r in list_category_rules(db)]
+    cat_rules = list_category_rules(db)
     rows = list(db.scalars(select(LedgerEntry)).all())
     removed = 0
     updated = 0
@@ -969,24 +1082,6 @@ def reconcile_ledger_entries(db: Session) -> dict[str, int]:
             ):
                 r.amount_myr = reparsed_amt
                 changed = True
-        # Fix TNG statement directions & split P2P Transfer In (repayment) vs P2P Transfer Out (expense)
-        if r.sender_email == "statement@touch'ngo":
-            tng_text = f"{merch_lower} {subj_lower}"
-            if "duitnow_recei" in tng_text or "receive from wallet" in tng_text:
-                if r.tx_type != "repayment":
-                    r.tx_type = "repayment"
-                    changed = True
-                if r.category in ("P2P Transfers", "General", "Bank / Retail"):
-                    r.category = "P2P Transfer In"
-                    changed = True
-            elif "transfer to wallet" in tng_text or "duitnow_trans" in tng_text:
-                if r.tx_type != "expense":
-                    r.tx_type = "expense"
-                    changed = True
-                if r.category in ("P2P Transfers", "General", "Bank / Retail"):
-                    r.category = "P2P Transfer Out"
-                    changed = True
-
         # Fix historical Google Play receipts saved as income
         if "googleplay-noreply@google.com" in r.sender_email.lower() and r.tx_type != "expense":
             r.tx_type = "expense"
@@ -1004,12 +1099,38 @@ def reconcile_ledger_entries(db: Session) -> dict[str, int]:
                 changed = True
 
         if not r.manual_override:
+            # Fix TNG statement directions & split P2P Transfer In (repayment) vs P2P Transfer Out (expense)
+            if r.sender_email == "statement@touch'ngo":
+                tng_text = f"{merch_lower} {subj_lower}"
+                if "duitnow_recei" in tng_text or "receive from wallet" in tng_text:
+                    if r.tx_type == "expense" or r.category in ("P2P Transfers", "P2P Transfer In", "General", "Bank / Retail"):
+                        if r.tx_type != "repayment":
+                            r.tx_type = "repayment"
+                            changed = True
+                    if r.category in ("P2P Transfers", "General", "Bank / Retail"):
+                        r.category = "P2P Transfer In"
+                        changed = True
+                elif "transfer to wallet" in tng_text or "duitnow_trans" in tng_text:
+                    if r.tx_type != "expense":
+                        r.tx_type = "expense"
+                        changed = True
+                    if r.category in ("P2P Transfers", "General", "Bank / Retail"):
+                        r.category = "P2P Transfer Out"
+                        changed = True
+
             self_tx = is_self_transfer_match(r.merchant, r.subject, holder_names)
             if r.is_self_transfer != self_tx:
                 r.is_self_transfer = self_tx
                 changed = True
 
-            matched_rule = match_category_rule_with_flow(f"{r.merchant} {r.subject} {r.sender_email}", cat_rules)
+            matched_rule = match_category_rule_with_flow(
+                f"{r.merchant} {r.subject} {r.sender_email}",
+                cat_rules,
+                occurred_at=r.occurred_at,
+                amount_myr=r.amount_myr,
+                tx_type=r.tx_type,
+                account_name=r.account_name,
+            )
             if matched_rule:
                 matched_cat, rule_flow = matched_rule
                 if matched_cat != r.category:
@@ -1055,7 +1176,14 @@ def reconcile_ledger_entries(db: Session) -> dict[str, int]:
         key = (u.occurred_at.date(), u.tx_type, round(u.amount_myr, 2), bk)
         matches = bank_buckets.get(key)
         if matches:
-            matches.pop(0)
+            matched_bank = matches.pop(0)
+            if (
+                not matched_bank.manual_override
+                and u.category not in ("General", "Bank / Retail", "Transport")
+                and matched_bank.category in ("General", "Bank / Retail", "Transport")
+            ):
+                matched_bank.category = u.category
+                updated += 1
             db.delete(u)
             removed += 1
 
@@ -1456,7 +1584,7 @@ def _evaluate_recurring_bills(
 
 def _compute_burn_pace_ratio(db: Session, total_expense: float, target_month: str) -> float | None:
     """Compare % of monthly budget spent vs % of month elapsed (>1.0 means spending ahead of pace)."""
-    cfg = db.get(AppSettings, 1)
+    cfg = db.scalar(select(AppSettings))
     budget = cfg.monthly_budget_myr if (cfg and cfg.monthly_budget_myr > 0) else 3000.0
     now_dt = datetime.now(timezone.utc)
     if target_month != now_dt.strftime("%Y-%m"):

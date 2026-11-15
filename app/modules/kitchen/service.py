@@ -6,12 +6,17 @@ import httpx
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.modules.kitchen.models import KitchenItem, NutritionTarget
+from app.modules.kitchen import taste
+from app.modules.kitchen.models import KitchenItem, NutritionTarget, ShoppingListItem
 from app.modules.kitchen.schemas import (
     AddKitchenItemRequest,
+    CookedMealOut,
+    CookedMealRequest,
     DinnerRecipeOut,
     KitchenItemOut,
     NutritionTargetOut,
+    ShoppingListCreate,
+    ShoppingListItemOut,
 )
 
 _SHELF_LIFE_HINTS = {
@@ -24,49 +29,6 @@ _SHELF_LIFE_HINTS = {
     "milk": ("Dairy", 7, 8.0, 120.0),
     "tofu": ("Protein", 7, 10.0, 95.0),
 }
-
-
-def seed_default_kitchen(db: Session) -> None:
-    if db.scalar(select(KitchenItem.id).limit(1)) is not None:
-        return
-    now = datetime.now(timezone.utc)
-    defaults = [
-        KitchenItem(
-            name="Fresh Kangkung",
-            category="Produce",
-            quantity=1,
-            unit="bunch",
-            source="NSK Thermal OCR",
-            shelf_life_days=6,
-            protein_g=3.0,
-            calories=25.0,
-            purchased_at=now - timedelta(days=5),  # Day 5: triggers expiry alert
-        ),
-        KitchenItem(
-            name="Kampung Eggs",
-            category="Protein",
-            quantity=10,
-            unit="pcs",
-            source="Jaya Grocer",
-            shelf_life_days=21,
-            protein_g=6.0,
-            calories=70.0,
-            purchased_at=now - timedelta(days=2),
-        ),
-        KitchenItem(
-            name="Canned Tuna in Water",
-            category="Pantry",
-            quantity=3,
-            unit="cans",
-            source="Jaya Grocer",
-            shelf_life_days=365,
-            protein_g=24.0,
-            calories=130.0,
-            purchased_at=now - timedelta(days=10),
-        ),
-    ]
-    db.add_all(defaults)
-    db.commit()
 
 
 def _to_item_out(item: KitchenItem) -> KitchenItemOut:
@@ -84,9 +46,10 @@ def _to_item_out(item: KitchenItem) -> KitchenItemOut:
         shelf_life_days=item.shelf_life_days,
         days_elapsed=days_elapsed,
         days_remaining=days_remaining,
-        is_expiring_soon=(days_remaining <= 1 and item.quantity > 0),
+        is_expiring_soon=(not item.is_staple and days_remaining <= 1 and item.quantity > 0),
         protein_g=item.protein_g,
         calories=item.calories,
+        is_staple=item.is_staple,
         purchased_at=purchased,
     )
 
@@ -109,6 +72,7 @@ def add_item(db: Session, req: AddKitchenItemRequest) -> KitchenItemOut:
         shelf_life_days=req.shelf_life_days,
         protein_g=req.protein_g,
         calories=req.calories,
+        is_staple=req.is_staple,
         purchased_at=purchased,
     )
     db.add(item)
@@ -224,16 +188,44 @@ def get_today_target(db: Session) -> NutritionTargetOut:
 
 
 def synthesize_dinner_recipe(db: Session) -> DinnerRecipeOut:
-    """Use expiring fridge items + Trainer recovery macros via local Ollama (RTX 4060) or fast fallback."""
+    """Use expiring fridge items + Trainer recovery macros + Taste Knowledgebase via local Ollama or fallback."""
     items = list_items(db)
     target = get_today_target(db)
     expiring = [i.name for i in items if i.is_expiring_soon]
     all_names = [i.name for i in items if i.quantity > 0]
 
+    analysis = taste.analyze_fridge_taste(db, all_names)
+    applied_rule_ids = [r.rule_id for r in analysis.applied_rules[:3]]
+    taste_notes = [
+        f"{r.title} ({', '.join(r.matched_ingredients)}): {r.rationale}"
+        for r in analysis.applied_rules[:3]
+    ]
+    taste_notes.extend(analysis.missing_balance_hints[:2])
+    for pa in analysis.top_pair_affinities[:2]:
+        if pa.affinity_score > 0:
+            taste_notes.append(f"Proven favorite pair: {pa.ingredient_a} + {pa.ingredient_b} (affinity {pa.affinity_score:+.2f})")
+
+    technique_notes = [
+        f"{p.name}: {p.cooking_method or 'flexible'} ({p.texture or 'balanced'}, {p.aroma or 'mild'} aroma)"
+        for p in analysis.matched_profiles
+        if p.cooking_method or p.texture or p.aroma
+    ]
+
+    palate = analysis.palate
+    palate_summary = (
+        f"sweet={palate.sweet:.2f}, sour={palate.sour:.2f}, salty={palate.salty:.2f}, "
+        f"umami={palate.umami:.2f}, spicy={palate.spicy:.2f}"
+    )
+    rules_prompt = "\n".join(f"- {n}" for n in taste_notes) or "- Balance savory umami with bright acidity."
+    tech_prompt = "\n".join(f"- {t}" for t in technique_notes) or "- Use high-heat sear or stir-fry."
+
     prompt = (
-        f"Create a concise 4-step high-protein Malaysian dinner recipe using these fridge items: "
-        f"{', '.join(all_names)}. Prioritize expiring items: {', '.join(expiring) or 'none'}. "
-        f"Target protein: {target.total_protein_g}g. Recovery mode: {target.recovery_mode}."
+        f"Create a concise 4-step high-protein Malaysian dinner recipe from first principles using these fridge items: "
+        f"{', '.join(all_names)}. Prioritize expiring items: {', '.join(expiring) or 'none'}.\n"
+        f"Target protein: {target.total_protein_g}g. Recovery mode: {target.recovery_mode}.\n"
+        f"Personal palate weights: {palate_summary}.\n"
+        f"Ingredient techniques & textures:\n{tech_prompt}\n"
+        f"Apply these learned taste pairing rules and explain the flavor balance:\n{rules_prompt}"
     )
 
     try:
@@ -249,27 +241,108 @@ def synthesize_dinner_recipe(db: Session) -> DinnerRecipeOut:
                 )
                 if resp.status_code == 200 and resp.json().get("response"):
                     return DinnerRecipeOut(
-                        title=f"RTX 4060 Local LLM ({model_name})",
+                        title=f"RTX 4060 Taste-Aware Chef ({model_name})",
                         used_expiring_items=expiring,
                         recovery_additions=target.recommended_additions,
                         instructions=resp.json()["response"].strip(),
                         engine="ollama_local",
+                        taste_notes=taste_notes,
+                        applied_rule_ids=applied_rule_ids,
+                        ingredients_used=all_names,
                     )
     except Exception:
         pass
 
     exp_str = ", ".join(expiring) if expiring else "available greens"
     rec_str = " + ".join(target.recommended_additions) if target.recovery_mode else "standard portion"
+    rule_line = (
+        f"2. Flavor balance: {taste_notes[0]}\n"
+        if taste_notes
+        else "2. Balance savory aromatics with a splash of acid/sweetness.\n"
+    )
     instructions = (
-        f"1. Flash-stir-fry {exp_str} with garlic and a dash of soy sauce (3 mins).\n"
-        f"2. Sear/scramble {rec_str} on high heat for fast muscle recovery.\n"
-        f"3. Combine over warm rice or eat as a high-protein bowl ({target.total_protein_g}g daily protein target)."
+        f"1. Flash-stir-fry {exp_str} with garlic on high heat (3 mins).\n"
+        f"{rule_line}"
+        f"3. Sear/scramble {rec_str} for fast muscle recovery.\n"
+        f"4. Combine into a balanced high-protein bowl ({target.total_protein_g}g daily protein target)."
     )
     return DinnerRecipeOut(
-        title=f"Zero-Waste Recovery Bowl ({' + '.join(expiring or ['Fridge Mix'])})",
+        title=f"Taste-Balanced Recovery Bowl ({' + '.join(expiring or ['Fridge Mix'])})",
         used_expiring_items=expiring,
         recovery_additions=target.recommended_additions,
         instructions=instructions,
         engine="deterministic_fallback",
+        taste_notes=taste_notes,
+        applied_rule_ids=applied_rule_ids,
+        ingredients_used=all_names,
     )
+
+
+def mark_meal_cooked(db: Session, req: CookedMealRequest) -> CookedMealOut:
+    """Deduct used non-staple ingredients from fridge inventory after cooking."""
+    deducted: list[str] = []
+    removed: list[str] = []
+    skipped_staples: list[str] = []
+
+    items = list(db.scalars(select(KitchenItem)).all())
+    wanted = [n.strip().lower() for n in req.ingredients_used if n.strip()]
+    for item in items:
+        ilower = item.name.lower()
+        if not any(w == ilower or w in ilower or ilower in w for w in wanted):
+            continue
+        if item.is_staple:
+            skipped_staples.append(item.name)
+            continue
+        updated = adjust_item_quantity(db, item.id, -req.deduct_qty)
+        if updated is None:
+            removed.append(item.name)
+        else:
+            deducted.append(f"{item.name} ({updated.quantity} {updated.unit} left)")
+    return CookedMealOut(deducted_items=deducted, removed_items=removed, skipped_staples=skipped_staples)
+
+
+def _to_shopping_out(row: ShoppingListItem) -> ShoppingListItemOut:
+    return ShoppingListItemOut(
+        id=row.id,
+        name=row.name,
+        reason=row.reason,
+        is_checked=row.is_checked,
+        created_at=row.created_at,
+    )
+
+
+def list_shopping_items(db: Session) -> list[ShoppingListItemOut]:
+    rows = list(
+        db.scalars(
+            select(ShoppingListItem).order_by(ShoppingListItem.is_checked.asc(), ShoppingListItem.created_at.desc())
+        ).all()
+    )
+    return [_to_shopping_out(r) for r in rows]
+
+
+def add_shopping_item(db: Session, req: ShoppingListCreate) -> ShoppingListItemOut:
+    row = ShoppingListItem(name=req.name.strip(), reason=req.reason.strip())
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    return _to_shopping_out(row)
+
+
+def toggle_shopping_item(db: Session, item_id: int) -> ShoppingListItemOut | None:
+    row = db.get(ShoppingListItem, item_id)
+    if not row:
+        return None
+    row.is_checked = not row.is_checked
+    db.commit()
+    db.refresh(row)
+    return _to_shopping_out(row)
+
+
+def delete_shopping_item(db: Session, item_id: int) -> bool:
+    row = db.get(ShoppingListItem, item_id)
+    if not row:
+        return False
+    db.delete(row)
+    db.commit()
+    return True
 

@@ -12,6 +12,7 @@ class AppSettingsOut(BaseModel):
     default_calories: int
     default_protein_g: int
     account_holder_names: str = ""
+    has_tng_pdf_password: bool = False
     last_auto_sync_at: datetime | None
     last_auto_sync_status: str
 
@@ -28,4 +29,5 @@ class UpdateSettingsRequest(BaseModel):
     default_calories: int = Field(default=2000, ge=800, le=6000)
     default_protein_g: int = Field(default=120, ge=30, le=400)
     account_holder_names: str = Field(default="", max_length=500)
+    tng_pdf_password: str | None = Field(default=None, max_length=100)
 

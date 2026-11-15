@@ -1129,5 +1129,437 @@ def test_smart_repayment_suggestion_split_owed_recurring_subbudget_and_csv():
     assert "90.00" in csv_text  # Net after RM 30 repayment
 
 
+def test_tng_email_attachment_auto_download_and_unlock(monkeypatch):
+    import email
+    import io
+    from email.message import EmailMessage
+    from pypdf import PdfWriter
+
+    from app.modules.settings import service as settings_service
+    from app.modules.settings.schemas import UpdateSettingsRequest
+    from app.modules.wealth import service
+    from app.modules.wealth.email_client import _extract_attachments
+    from app.modules.wealth.models import WhitelistedSender
+    from app.modules.wealth.schemas import StatementBackfillResult
+
+    writer = PdfWriter()
+    writer.add_blank_page(width=200, height=200)
+    writer.encrypt("1123456789")
+    buf = io.BytesIO()
+    writer.write(buf)
+    pdf_bytes = buf.getvalue()
+
+    msg = EmailMessage()
+    msg["From"] = "Touch 'n Go eWallet <ewallet@tngdigital.com.my>"
+    msg["Subject"] = "Your Transaction History for 17 August 2026 - 14 November 2026"
+    msg.set_content("For security, the attached PDF file is password-protected.")
+    msg.add_attachment(
+        pdf_bytes,
+        maintype="application",
+        subtype="pdf",
+        filename="tng_ewallet_transactions.pdf",
+    )
+
+    parsed_msg = email.message_from_bytes(msg.as_bytes())
+    attachments = _extract_attachments(parsed_msg)
+    assert len(attachments) == 1
+    assert attachments[0].filename == "tng_ewallet_transactions.pdf"
+    assert attachments[0].data == pdf_bytes
+
+    db = _make_session()
+    db.add(WhitelistedSender(sender_email="ewallet@tngdigital.com.my", display_name="Touch 'n Go", is_active=True))
+    db.commit()
+
+    class _FakeProvider:
+        def fetch_messages(self, start_date, end_date, sender_emails=None, headers_only=False):
+            from app.modules.wealth.email_client import RawEmail
+
+            return [
+                RawEmail(
+                    message_id="<tng-stmt-1@tngdigital.com.my>",
+                    sender_email="ewallet@tngdigital.com.my",
+                    sender_name="Touch 'n Go eWallet",
+                    subject="Your Transaction History for 17 August 2026 - 14 November 2026",
+                    body="Please use your registered TNG eWallet mobile number.",
+                    received_at=datetime(2026, 11, 14, 9, 0, tzinfo=timezone.utc),
+                    attachments=attachments,
+                )
+            ]
+
+    monkeypatch.setattr(service, "get_email_provider", lambda *_args, **_kwargs: _FakeProvider())
+
+    # Without password, locked PDF is skipped safely without crashing sync
+    res_locked = service.sync_whitelisted_transactions(db, datetime(2026, 11, 1).date(), datetime(2026, 11, 15).date())
+    assert res_locked.scanned_emails == 1
+    assert res_locked.unparsed_count == 1
+
+    # With phone number stored in Settings (including +60 and dash), sync normalizes and unlocks PDF
+    settings_service.update_settings(db, UpdateSettingsRequest(tng_pdf_password="+6011-23456789"))
+    unlocked_calls: list[tuple[str, str | None]] = []
+    orig_backfill = service.backfill_from_statement
+
+    def _spy_backfill(db_sess, filename, file_bytes, bank_name, pdf_password=None):
+        res = orig_backfill(db_sess, filename, file_bytes, bank_name, pdf_password=pdf_password)
+        unlocked_calls.append((bank_name, pdf_password))
+        return StatementBackfillResult(
+            filename=filename,
+            bank_name=bank_name,
+            parsed_rows=2,
+            inserted_count=2,
+            skipped_duplicates=0,
+        )
+
+    monkeypatch.setattr(service, "backfill_from_statement", _spy_backfill)
+    res_unlocked = service.sync_whitelisted_transactions(db, datetime(2026, 11, 1).date(), datetime(2026, 11, 15).date())
+    assert unlocked_calls == [("Touch 'n Go", "1123456789")]
+    assert res_unlocked.inserted_count == 2
+    assert res_unlocked.unparsed_count == 0
+
+
+def test_grab_food_receipt_deduplicated_against_tng_cardissuance_payment():
+    from app.modules.wealth import service
+    from app.modules.wealth.models import LedgerEntry
+
+    db = _make_session()
+    grab_receipt = LedgerEntry(
+        idempotency_hash="grab-food-1975",
+        sender_email="no-reply@grab.com",
+        merchant="Grab",
+        category="Food & Beverage",
+        tx_type="expense",
+        amount_myr=19.75,
+        occurred_at=datetime(2026, 11, 14, 13, 35, tzinfo=timezone.utc),
+        subject="Your Grab E-Receipt",
+        account_name="Unassigned",
+    )
+    tng_card = LedgerEntry(
+        idempotency_hash="tng-cardissuance-1975",
+        sender_email="statement@touch'ngo",
+        merchant="CARDISSUANCE_ PAYMENT TNGOW3MY1 260 Payment - Grab* A- 89165",
+        category="Transport",
+        tx_type="expense",
+        amount_myr=19.75,
+        occurred_at=datetime(2026, 11, 14, 0, 0, tzinfo=timezone.utc),
+        subject="[Touch 'n Go Statement] CARDISSUANCE_: CARDISSUANCE_ PAYMENT TNGOW3MY1 260 Payment - Grab* A- 89165",
+        account_name="Touch 'n Go",
+    )
+    db.add_all([grab_receipt, tng_card])
+    db.commit()
+
+    res = service.reconcile_ledger_entries(db)
+    assert res["removed"] == 1
+    remaining = db.query(LedgerEntry).all()
+    assert len(remaining) == 1
+    assert remaining[0].account_name == "Touch 'n Go"
+    assert remaining[0].category == "Food & Beverage"
+
+
+def test_google_play_receipt_deduplicated_against_tng_google_one_payment():
+    from app.modules.wealth import service
+    from app.modules.wealth.models import LedgerEntry
+
+    db = _make_session()
+    google_play = LedgerEntry(
+        idempotency_hash="google-play-2499",
+        sender_email="googleplay-noreply@google.com",
+        merchant="Google Play",
+        category="Subscriptions & Digital",
+        tx_type="expense",
+        amount_myr=24.99,
+        occurred_at=datetime(2026, 11, 5, 22, 42, 5, tzinfo=timezone.utc),
+        subject="Your Google Play Order Receipt from Nov 6, 2026",
+        account_name="Unassigned",
+    )
+    tng_google_one = LedgerEntry(
+        idempotency_hash="tng-google-one-2499",
+        sender_email="statement@touch'ngo",
+        merchant="Payment TNGOW3MY1 772 GOOGLE*ONE 01M 35060",
+        category="Subscriptions & Digital",
+        tx_type="expense",
+        amount_myr=24.99,
+        occurred_at=datetime(2026, 11, 5, 0, 0, tzinfo=timezone.utc),
+        subject="[Touch 'n Go Statement] Payment: Payment TNGOW3MY1 772 GOOGLE*ONE 01M 35060",
+        account_name="Touch 'n Go",
+    )
+    db.add_all([google_play, tng_google_one])
+    db.commit()
+
+    res = service.reconcile_ledger_entries(db)
+    assert res["removed"] == 1
+    remaining = db.query(LedgerEntry).all()
+    assert len(remaining) == 1
+    assert remaining[0].account_name == "Touch 'n Go"
+    assert remaining[0].category == "Subscriptions & Digital"
+
+
+def test_ensure_sqlite_columns_adds_all_app_settings_columns():
+    from sqlalchemy import create_engine
+    from app.main import _ensure_sqlite_columns
+
+    eng = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False})
+    with eng.begin() as conn:
+        conn.exec_driver_sql("CREATE TABLE app_settings (id INTEGER PRIMARY KEY)")
+        conn.exec_driver_sql("CREATE TABLE ledger_entries (id INTEGER PRIMARY KEY)")
+        conn.exec_driver_sql("CREATE TABLE deletion_logs (id INTEGER PRIMARY KEY)")
+        conn.exec_driver_sql("CREATE TABLE category_rules (id INTEGER PRIMARY KEY)")
+        conn.exec_driver_sql("CREATE TABLE recurring_bills (id INTEGER PRIMARY KEY)")
+
+    _ensure_sqlite_columns(eng)
+
+    with eng.begin() as conn:
+        cols = {row[1] for row in conn.exec_driver_sql("PRAGMA table_info(app_settings)").fetchall()}
+    assert {"account_holder_names", "live_listener_enabled", "auto_learn_categories", "tng_pdf_password"} <= cols
+
+
+def test_settings_output_masks_tng_pdf_password_and_preserves_when_omitted():
+    from app.modules.settings import service as settings_service
+    from app.modules.settings.schemas import AppSettingsOut, UpdateSettingsRequest
+
+    db = _make_session()
+    row = settings_service.update_settings(db, UpdateSettingsRequest(tng_pdf_password="1123456789"))
+    out = AppSettingsOut.model_validate(row).model_dump()
+    assert "tng_pdf_password" not in out
+    assert out["has_tng_pdf_password"] is True
+
+    # Saving other settings without tng_pdf_password must keep the existing password
+    row2 = settings_service.update_settings(db, UpdateSettingsRequest(monthly_budget_myr=4000.0))
+    assert row2.tng_pdf_password == "1123456789"
+
+
+def test_category_rule_saves_and_validates_custom_color():
+    import pytest
+    from pydantic import ValidationError
+    from app.modules.wealth import service
+    from app.modules.wealth.schemas import CategoryRuleOut, CategoryRuleUpsertRequest
+
+    db = _make_session()
+    saved = service.upsert_category_rule(
+        db,
+        CategoryRuleUpsertRequest(name="Badminton", keywords="shuttle, court", color="#34d399"),
+    )
+    assert saved.color == "#34D399"
+    assert CategoryRuleOut.model_validate(saved).color == "#34D399"
+
+    with pytest.raises(ValidationError):
+        CategoryRuleUpsertRequest(name="Bad", keywords="", color="not-a-hex")
+
+
+def test_pattern_category_rules_match_day_amount_direction_and_priority():
+    from app.modules.wealth import service
+    from app.modules.wealth.models import LedgerEntry
+    from app.modules.wealth.schemas import CategoryRuleUpsertRequest
+
+    db = _make_session()
+    service.upsert_category_rule(
+        db,
+        CategoryRuleUpsertRequest(name="Shopping & Retail", keywords="shopee", flow_type="expense"),
+    )
+    service.upsert_category_rule(
+        db,
+        CategoryRuleUpsertRequest(
+            name="Shopee PayLater",
+            keywords="shopee",
+            flow_type="expense",
+            tx_direction="expense",
+            day_min=1,
+            day_max=10,
+        ),
+    )
+    service.upsert_category_rule(
+        db,
+        CategoryRuleUpsertRequest(
+            name="RCV Rental",
+            keywords="",
+            flow_type="income",
+            tx_direction="income",
+            day_min=23,
+            day_max=30,
+            amount_min=900.0,
+            amount_max=900.0,
+        ),
+    )
+    service.upsert_category_rule(
+        db,
+        CategoryRuleUpsertRequest(
+            name="Allowance",
+            keywords="",
+            flow_type="income",
+            tx_direction="income",
+            day_min=20,
+            day_max=20,
+            amount_min=2000.0,
+            amount_max=2000.0,
+        ),
+    )
+
+    e_shopee_early = LedgerEntry(
+        idempotency_hash="pat-shopee-5",
+        sender_email="alerts@rytbank.my",
+        merchant="ShopeePay",
+        category="General",
+        tx_type="expense",
+        amount_myr=120.0,
+        occurred_at=datetime(2026, 11, 5, 10, 0, tzinfo=timezone.utc),
+        subject="Payment to ShopeePay",
+        account_name="Ryt Bank",
+    )
+    e_shopee_late = LedgerEntry(
+        idempotency_hash="pat-shopee-18",
+        sender_email="alerts@rytbank.my",
+        merchant="ShopeePay",
+        category="General",
+        tx_type="expense",
+        amount_myr=45.0,
+        occurred_at=datetime(2026, 11, 18, 10, 0, tzinfo=timezone.utc),
+        subject="Payment to ShopeePay",
+        account_name="Ryt Bank",
+    )
+    e_rental = LedgerEntry(
+        idempotency_hash="pat-rental-25",
+        sender_email="alerts@rytbank.my",
+        merchant="Tenant Transfer",
+        category="General",
+        tx_type="income",
+        amount_myr=900.0,
+        occurred_at=datetime(2026, 11, 25, 12, 0, tzinfo=timezone.utc),
+        subject="DuitNow Transfer Received",
+        account_name="Ryt Bank",
+    )
+    e_allowance = LedgerEntry(
+        idempotency_hash="pat-allow-20",
+        sender_email="alerts@rytbank.my",
+        merchant="Parents",
+        category="General",
+        tx_type="income",
+        amount_myr=2000.0,
+        occurred_at=datetime(2026, 11, 20, 9, 0, tzinfo=timezone.utc),
+        subject="DuitNow Transfer Received",
+        account_name="Ryt Bank",
+    )
+    db.add_all([e_shopee_early, e_shopee_late, e_rental, e_allowance])
+    db.commit()
+
+    service.reconcile_ledger_entries(db)
+    db.refresh(e_shopee_early)
+    db.refresh(e_shopee_late)
+    db.refresh(e_rental)
+    db.refresh(e_allowance)
+
+    assert e_shopee_early.category == "Shopee PayLater"
+    assert e_shopee_late.category == "Shopping & Retail"
+    assert e_rental.category == "RCV Rental"
+    assert e_rental.tx_type == "income"
+    assert e_allowance.category == "Allowance"
+    assert e_allowance.tx_type == "income"
+
+
+def test_reconcile_preserves_income_on_tng_duitnow_recei_for_manual_override_and_income_rule():
+    from app.modules.wealth import service
+    from app.modules.wealth.models import LedgerEntry
+    from app.modules.wealth.schemas import CategoryRuleUpsertRequest
+
+    db = _make_session()
+    service.upsert_category_rule(
+        db,
+        CategoryRuleUpsertRequest(name="RCV Rental", keywords="guna", flow_type="income"),
+    )
+    manual_row = LedgerEntry(
+        idempotency_hash="tng-manual-income",
+        sender_email="statement@touch'ngo",
+        merchant="LIM SHIAW YONG",
+        category="Allowance",
+        tx_type="income",
+        amount_myr=2000.0,
+        occurred_at=datetime(2026, 8, 20, 0, 0, tzinfo=timezone.utc),
+        subject="[Touch 'n Go Statement] DUITNOW_RECEI: DUITNOW_RECEI",
+        account_name="Touch 'n Go",
+        manual_override=True,
+    )
+    rule_row = LedgerEntry(
+        idempotency_hash="tng-rule-income",
+        sender_email="statement@touch'ngo",
+        merchant="GUNA SUNDARY",
+        category="P2P Transfer In",
+        tx_type="repayment",
+        amount_myr=900.0,
+        occurred_at=datetime(2026, 8, 26, 0, 0, tzinfo=timezone.utc),
+        subject="[Touch 'n Go Statement] DUITNOW_RECEI: GUNA SUNDARY",
+        account_name="Touch 'n Go",
+        manual_override=False,
+    )
+    db.add_all([manual_row, rule_row])
+    db.commit()
+
+    service.reconcile_ledger_entries(db)
+    db.refresh(manual_row)
+    db.refresh(rule_row)
+
+    assert manual_row.tx_type == "income"
+    assert rule_row.category == "RCV Rental"
+    assert rule_row.tx_type == "income"
+
+
+def test_category_model_uses_amount_and_monthly_cadence_for_same_merchant():
+    from app.modules.wealth import category_model
+    from app.modules.wealth.models import LedgerEntry
+
+    db = _make_session()
+    db.add_all([
+        LedgerEntry(
+            idempotency_hash="loy-rent-1",
+            sender_email="alerts@rytbank.my",
+            merchant="LOY GUANG MING",
+            category="Rent",
+            tx_type="expense",
+            amount_myr=1865.95,
+            occurred_at=datetime(2026, 10, 10, 10, 0, tzinfo=timezone.utc),
+            subject="Transfer to LOY GUANG MING",
+            account_name="Ryt Bank",
+            manual_override=True,
+        ),
+        LedgerEntry(
+            idempotency_hash="loy-meal-1",
+            sender_email="alerts@rytbank.my",
+            merchant="LOY GUANG MING",
+            category="Food & Beverage",
+            tx_type="expense",
+            amount_myr=24.0,
+            occurred_at=datetime(2026, 10, 12, 10, 0, tzinfo=timezone.utc),
+            subject="Transfer to LOY GUANG MING",
+            account_name="Ryt Bank",
+            manual_override=True,
+        ),
+        LedgerEntry(
+            idempotency_hash="loy-meal-2",
+            sender_email="alerts@rytbank.my",
+            merchant="LOY GUANG MING",
+            category="Food & Beverage",
+            tx_type="expense",
+            amount_myr=59.0,
+            occurred_at=datetime(2026, 10, 18, 10, 0, tzinfo=timezone.utc),
+            subject="Transfer to LOY GUANG MING",
+            account_name="Ryt Bank",
+            manual_override=True,
+        ),
+    ])
+    db.commit()
+
+    summary = category_model.train_category_model(db)
+    assert summary["trained"] is True
+    state = category_model.get_model_state(db)
+    pred_rent, _ = category_model.predict_category(
+        state.model_json, "LOY GUANG MING", "Transfer to LOY GUANG MING", "alerts@rytbank.my", "Ryt Bank", "expense",
+        amount_myr=1850.0, occurred_at=datetime(2026, 11, 10, 10, 0, tzinfo=timezone.utc), monthly_count=1,
+    )
+    pred_small, _ = category_model.predict_category(
+        state.model_json, "LOY GUANG MING", "Transfer to LOY GUANG MING", "alerts@rytbank.my", "Ryt Bank", "expense",
+        amount_myr=35.0, occurred_at=datetime(2026, 11, 15, 10, 0, tzinfo=timezone.utc), monthly_count=2,
+    )
+    assert pred_rent == "Rent"
+    assert pred_small == "Food & Beverage"
+
+
+
+
 
 

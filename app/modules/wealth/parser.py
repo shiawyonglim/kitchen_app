@@ -189,14 +189,86 @@ def match_category_rules(text: str, rules: list[tuple[str, str]]) -> str | None:
     return None
 
 
-def match_category_rule_with_flow(text: str, rules: list[tuple[str, str, str]]) -> tuple[str, str] | None:
-    """Return (category_name, flow_type) for the first matching user-configured category rule."""
+def match_category_rule_with_flow(
+    text: str,
+    rules: list,
+    occurred_at: datetime | None = None,
+    amount_myr: float | None = None,
+    tx_type: str | None = None,
+    account_name: str | None = None,
+) -> tuple[str, str] | None:
+    """Return (category_name, flow_type) for the highest-specificity matching rule."""
     lowered = text.lower()
-    for cat_name, keywords_csv, flow_type in rules:
-        for raw_kw in (keywords_csv or "").split(","):
-            kw = raw_kw.strip().lower()
-            if kw and kw in lowered:
-                return cat_name, (flow_type or "auto")
+    acct_lower = (account_name or "").lower()
+    tx_day = occurred_at.day if occurred_at else None
+
+    def _rule_fields(r):
+        if isinstance(r, tuple):
+            return (r[0], r[1] or "", r[2] or "auto", None, None, None, None, "any", "")
+        return (
+            r.name,
+            r.keywords or "",
+            r.flow_type or "auto",
+            r.day_min,
+            r.day_max,
+            r.amount_min,
+            r.amount_max,
+            r.tx_direction or "any",
+            (r.account_filter or "").strip(),
+        )
+
+    _GENERIC_FALLBACK_CATEGORIES = {
+        "P2P Transfer In",
+        "P2P Transfer Out",
+        "Bank / Retail",
+        "Parking & E-Wallet",
+        "General",
+    }
+
+    def _specificity(r) -> tuple[int, int]:
+        cat_name, kw, _, dmin, dmax, amin, amax, tdir, acct = _rule_fields(r)
+        not_generic = 0 if cat_name in _GENERIC_FALLBACK_CATEGORIES else 1
+        score = (
+            int(bool(kw.strip()))
+            + int(dmin is not None or dmax is not None)
+            + int(amin is not None or amax is not None)
+            + int(tdir != "any")
+            + int(bool(acct))
+        )
+        return (not_generic, score)
+
+    for rule in sorted(rules, key=_specificity, reverse=True):
+        cat_name, keywords_csv, flow_type, dmin, dmax, amin, amax, tdir, acct_filter = _rule_fields(rule)
+        kws = [k.strip().lower() for k in keywords_csv.split(",") if k.strip()]
+        has_pattern = any([kws, dmin is not None, dmax is not None, amin is not None, amax is not None, acct_filter])
+        if not has_pattern:
+            continue
+        if kws and not any(kw in lowered for kw in kws):
+            continue
+        if tdir == "expense" and tx_type and tx_type != "expense":
+            continue
+        if tdir == "income" and tx_type and tx_type not in ("income", "repayment"):
+            continue
+        if acct_filter and acct_filter.lower() not in acct_lower:
+            continue
+        if dmin is not None or dmax is not None:
+            if tx_day is None:
+                continue
+            lo = dmin if dmin is not None else 1
+            hi = dmax if dmax is not None else 31
+            if lo <= hi:
+                if not (lo <= tx_day <= hi):
+                    continue
+            elif not (tx_day >= lo or tx_day <= hi):
+                continue
+        if amin is not None or amax is not None:
+            if amount_myr is None:
+                continue
+            if amin is not None and amount_myr < amin - 1e-6:
+                continue
+            if amax is not None and amount_myr > amax + 1e-6:
+                continue
+        return cat_name, flow_type
     return None
 
 

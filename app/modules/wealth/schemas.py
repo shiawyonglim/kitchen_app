@@ -53,6 +53,13 @@ class CategoryRuleUpsertRequest(BaseModel):
     keywords: str = Field(default="", max_length=1000)
     flow_type: Literal["auto", "income", "repayment", "expense"] = "auto"
     monthly_budget_myr: float | None = Field(default=None, ge=0)
+    color: str = Field(default="", pattern=r"^(#[0-9a-fA-F]{6})?$")
+    day_min: int | None = Field(default=None, ge=1, le=31)
+    day_max: int | None = Field(default=None, ge=1, le=31)
+    amount_min: float | None = Field(default=None, ge=0)
+    amount_max: float | None = Field(default=None, ge=0)
+    tx_direction: Literal["any", "expense", "income"] = "any"
+    account_filter: str = Field(default="", max_length=64)
 
 
 class CategoryRuleOut(BaseModel):
@@ -61,6 +68,13 @@ class CategoryRuleOut(BaseModel):
     keywords: str
     flow_type: str = "auto"
     monthly_budget_myr: float | None = None
+    color: str = ""
+    day_min: int | None = None
+    day_max: int | None = None
+    amount_min: float | None = None
+    amount_max: float | None = None
+    tx_direction: str = "any"
+    account_filter: str = ""
 
     model_config = {"from_attributes": True}
 

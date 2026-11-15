@@ -1,15 +1,26 @@
 from __future__ import annotations
 
+import base64
 import email
 import imaplib
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
 from email.header import decode_header
 from email.utils import parseaddr, parsedate_to_datetime
 from bs4 import BeautifulSoup
+import httpx
+from sqlalchemy import select
+from sqlalchemy.orm import Session
 
 from app.config import settings
+
+
+@dataclass
+class EmailAttachment:
+    filename: str
+    content_type: str
+    data: bytes
 
 
 @dataclass
@@ -21,6 +32,7 @@ class RawEmail:
     body: str
     received_at: datetime
     gmail_thread_id: str | None = None
+    attachments: list[EmailAttachment] = field(default_factory=list)
 
 
 def _parse_gm_thrid(header_bytes: bytes | None) -> str | None:
@@ -78,6 +90,32 @@ def _extract_body(msg: email.message.Message) -> str:
     if msg.get_content_type() == "text/html":
         return BeautifulSoup(text, "html.parser").get_text(" ", strip=True)
     return text
+
+
+def _extract_attachments(msg: email.message.Message) -> list[EmailAttachment]:
+    attachments: list[EmailAttachment] = []
+    if not msg.is_multipart():
+        return attachments
+    for part in msg.walk():
+        if part.is_multipart():
+            continue
+        content_type = (part.get_content_type() or "").lower()
+        disposition = str(part.get("Content-Disposition") or "").lower()
+        filename = _decode_mime_str(part.get_filename())
+        is_statement_type = content_type in ("application/pdf", "text/csv", "application/vnd.ms-excel") or filename.lower().endswith((".pdf", ".csv"))
+        if "attachment" not in disposition and not (filename and is_statement_type) and content_type != "application/pdf":
+            continue
+        payload = part.get_payload(decode=True)
+        if not payload:
+            continue
+        attachments.append(
+            EmailAttachment(
+                filename=filename or ("statement.pdf" if content_type == "application/pdf" else "statement.csv"),
+                content_type=content_type,
+                data=payload,
+            )
+        )
+    return attachments
 
 
 def _imap_date(d: date) -> str:
@@ -164,6 +202,7 @@ class ImapEmailProvider:
                         dt = datetime.now(timezone.utc)
 
                     body = "" if headers_only else _extract_body(msg)
+                    attachments = [] if headers_only else _extract_attachments(msg)
                     results.append(
                         RawEmail(
                             message_id=message_id,
@@ -173,6 +212,7 @@ class ImapEmailProvider:
                             body=body,
                             received_at=dt,
                             gmail_thread_id=gmail_thread_id,
+                            attachments=attachments,
                         )
                     )
             return results
@@ -271,7 +311,149 @@ class DemoEmailProvider:
         return results
 
 
-def get_email_provider() -> ImapEmailProvider | DemoEmailProvider:
+class GmailApiEmailProvider:
+    """Reads real Google emails via the Gmail REST API using OAuth 2.0 tokens."""
+
+    BASE_URL = "https://gmail.googleapis.com/gmail/v1/users/me"
+
+    def __init__(self, db: Session, token_row) -> None:
+        self.db = db
+        self.token_row = token_row
+
+    def _access_token(self) -> str:
+        from app.modules.auth.google_oauth import get_valid_google_access_token
+
+        return get_valid_google_access_token(self.db, self.token_row)
+
+    def _parse_gmail_message(self, payload: dict, headers_only: bool, idx: int) -> RawEmail | None:
+        thread_id = payload.get("threadId")
+        if headers_only:
+            hdrs = {
+                h["name"].lower(): h["value"]
+                for h in payload.get("payload", {}).get("headers", [])
+                if "name" in h and "value" in h
+            }
+            display_name, addr = parseaddr(_decode_mime_str(hdrs.get("from")))
+            sender_email = addr.lower().strip()
+            if not sender_email:
+                return None
+            subject = _decode_mime_str(hdrs.get("subject"))
+            message_id = (hdrs.get("message-id") or f"gmail-{payload.get('id', idx)}").strip()
+            date_hdr = hdrs.get("date")
+            try:
+                dt = parsedate_to_datetime(date_hdr) if date_hdr else datetime.now(timezone.utc)
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=timezone.utc)
+            except Exception:
+                dt = datetime.now(timezone.utc)
+            return RawEmail(
+                message_id=message_id,
+                sender_email=sender_email,
+                sender_name=display_name or sender_email.split("@")[0],
+                subject=subject,
+                body="",
+                received_at=dt,
+                gmail_thread_id=thread_id,
+                attachments=[],
+            )
+
+        raw_b64 = payload.get("raw")
+        if not raw_b64:
+            return None
+        padded = raw_b64 + "=" * (-len(raw_b64) % 4)
+        raw_bytes = base64.urlsafe_b64decode(padded.encode("ascii"))
+        msg = email.message_from_bytes(raw_bytes)
+        display_name, addr = parseaddr(_decode_mime_str(msg.get("From")))
+        sender_email = addr.lower().strip()
+        if not sender_email:
+            return None
+        subject = _decode_mime_str(msg.get("Subject"))
+        message_id = (msg.get("Message-ID") or f"gmail-{payload.get('id', idx)}").strip()
+        try:
+            dt = parsedate_to_datetime(msg.get("Date")) if msg.get("Date") else datetime.now(timezone.utc)
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+        except Exception:
+            dt = datetime.now(timezone.utc)
+        return RawEmail(
+            message_id=message_id,
+            sender_email=sender_email,
+            sender_name=display_name or sender_email.split("@")[0],
+            subject=subject,
+            body=_extract_body(msg),
+            received_at=dt,
+            gmail_thread_id=thread_id,
+            attachments=_extract_attachments(msg),
+        )
+
+    def fetch_messages(
+        self,
+        start_date: date,
+        end_date: date,
+        sender_emails: list[str] | None = None,
+        headers_only: bool = False,
+    ) -> list[RawEmail]:
+        token = self._access_token()
+        headers = {"Authorization": f"Bearer {token}"}
+        after_str = start_date.strftime("%Y/%m/%d")
+        before_str = (end_date + timedelta(days=1)).strftime("%Y/%m/%d")
+        query = f"after:{after_str} before:{before_str}"
+        if sender_emails:
+            from_clause = " OR ".join(f"from:{s}" for s in sender_emails)
+            query = f"{query} ({from_clause})"
+
+        msg_refs: list[dict] = []
+        page_token: str | None = None
+        with httpx.Client(timeout=20.0) as client:
+            while True:
+                params: dict[str, str | int] = {"q": query, "maxResults": 100}
+                if page_token:
+                    params["pageToken"] = page_token
+                list_resp = client.get(f"{self.BASE_URL}/messages", headers=headers, params=params)
+                list_resp.raise_for_status()
+                data = list_resp.json()
+                msg_refs.extend(data.get("messages", []))
+                page_token = data.get("nextPageToken")
+                if not page_token or len(msg_refs) >= 500:
+                    break
+
+            results: list[RawEmail] = []
+            fmt = "metadata" if headers_only else "raw"
+            for idx, ref in enumerate(msg_refs):
+                msg_id = ref.get("id")
+                if not msg_id:
+                    continue
+                msg_params: list[tuple[str, str]] = [("format", fmt)]
+                if headers_only:
+                    for h in ("From", "Subject", "Date", "Message-ID"):
+                        msg_params.append(("metadataHeaders", h))
+                msg_resp = client.get(
+                    f"{self.BASE_URL}/messages/{msg_id}",
+                    headers=headers,
+                    params=msg_params,
+                )
+                if msg_resp.status_code != 200:
+                    continue
+                parsed = self._parse_gmail_message(msg_resp.json(), headers_only=headers_only, idx=idx)
+                if parsed is not None:
+                    results.append(parsed)
+            return results
+
+
+def get_email_provider(
+    db: Session | None = None,
+) -> GmailApiEmailProvider | ImapEmailProvider | DemoEmailProvider:
+    if db is not None:
+        from app.database import get_current_user_id
+        from app.modules.auth.models import GoogleOAuthToken
+
+        uid = db.info.get("user_id") or get_current_user_id()
+        token_row = db.scalar(
+            select(GoogleOAuthToken).where(GoogleOAuthToken.user_id == uid)
+        )
+        if token_row is not None and token_row.access_token:
+            return GmailApiEmailProvider(db=db, token_row=token_row)
+
     if settings.email_mode.lower() == "imap":
         return ImapEmailProvider(
             host=settings.imap_host,

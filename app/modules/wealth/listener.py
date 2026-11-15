@@ -6,8 +6,8 @@ import select
 from datetime import datetime, timezone
 from typing import Any
 
+import app.database as app_db
 from app.config import settings
-from app.database import SessionLocal
 from app.modules.settings import service as settings_service
 from app.modules.wealth.email_client import ImapEmailProvider
 
@@ -54,7 +54,7 @@ class WealthLiveListener:
 
     def _run_sync_now(self) -> None:
         self.status = "syncing"
-        with SessionLocal() as db:
+        with app_db.SessionLocal() as db:
             res_settings = settings_service.run_daily_auto_sync(db)
             status_text = res_settings.last_auto_sync_status or ""
         self.last_event_at = datetime.now(timezone.utc).isoformat()
@@ -89,20 +89,25 @@ class WealthLiveListener:
             self.last_error = None
             idle_started = datetime.now(timezone.utc)
             needs_sync = False
+            poll_ticks = 0
 
             while not stop_flag[0]:
                 # Renew IDLE every 240s per RFC 2177
                 if (datetime.now(timezone.utc) - idle_started).total_seconds() >= 240:
                     break
 
-                # Check if user disabled live listener in Settings
-                with SessionLocal() as db:
-                    if not settings_service.get_settings(db).live_listener_enabled:
-                        break
+                # Check if user disabled live listener in Settings (every ~15s)
+                if poll_ticks % 3 == 0:
+                    with app_db.SessionLocal() as db:
+                        if not settings_service.get_settings(db).live_listener_enabled:
+                            break
+                poll_ticks += 1
 
-                readable, _, _ = select.select([sock], [], [], 5.0)
-                if not readable:
-                    continue
+                # Drain TLS-buffered bytes before waiting on OS select
+                if not getattr(sock, "pending", lambda: 0)():
+                    readable, _, _ = select.select([sock], [], [], 5.0)
+                    if not readable:
+                        continue
 
                 line = client.readline()
                 if not line:
@@ -142,7 +147,7 @@ class WealthLiveListener:
                     continue
 
                 def _is_enabled() -> bool:
-                    with SessionLocal() as db:
+                    with app_db.SessionLocal() as db:
                         return settings_service.get_settings(db).live_listener_enabled
 
                 enabled = await asyncio.to_thread(_is_enabled)

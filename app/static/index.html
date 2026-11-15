@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>Personal ERP — Wealth, Assets, Kitchen, Trainer &amp; Friction</title>
+  <link rel="icon" type="image/png" href="/static/logo.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
@@ -326,31 +327,119 @@
     *::-webkit-scrollbar-track { background: transparent; }
     *::-webkit-scrollbar-thumb { background: #272830; border-radius: 9999px; }
     *::-webkit-scrollbar-thumb:hover { background: #3A3C47; }
+
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+    /* Natural tactile press & accessible focus-visible feedback */
+    :where(button, .glow-card) {
+      transition: transform 140ms ease-out, box-shadow 150ms ease-out, border-color 150ms ease-out, background-color 150ms ease-out;
+    }
+    :where(button):active {
+      scale: 0.97;
+    }
+    :where(a, button, input, select, textarea, [tabindex]):focus-visible {
+      outline: 2px solid #818CF8;
+      outline-offset: 2px;
+    }
+
+    /* Container-query responsive stacked cards for transaction tables */
+    .tx-table-wrap,
+    .modal-tx-table-wrap {
+      container-type: inline-size;
+    }
+    .modal-tx-table-wrap thead th {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      background-color: var(--bg-surface-1);
+      box-shadow: inset 0 -1px 0 var(--border-hairline);
+    }
+    @container (width < 640px) {
+      .tx-table-wrap thead { display: none; }
+      .tx-table-wrap table,
+      .tx-table-wrap tbody { display: block; width: 100%; }
+      .tx-table-wrap tbody tr {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 6px 10px;
+        padding: 10px 12px;
+        margin-bottom: 8px;
+        border-radius: 12px;
+        background: #0B0C0E;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+      }
+      .tx-table-wrap tbody td {
+        display: block;
+        padding: 0 !important;
+        min-width: 0;
+      }
+      .tx-table-wrap tbody td:nth-child(2) { grid-column: 1; grid-row: 1; }
+      .tx-table-wrap tbody td:nth-child(5) { grid-column: 2; grid-row: 1; text-align: right; }
+      .tx-table-wrap tbody td:nth-child(1) { grid-column: 1; grid-row: 2; font-size: 11px; }
+      .tx-table-wrap tbody td:nth-child(4) { grid-column: 2; grid-row: 2; text-align: right; font-size: 11px; }
+      .tx-table-wrap tbody td:nth-child(3) { grid-column: 1; grid-row: 3; align-self: center; }
+      .tx-table-wrap tbody td:nth-child(6) { grid-column: 2; grid-row: 3; justify-self: end; align-self: center; }
+    }
+    @container (width < 560px) {
+      .modal-tx-table-wrap thead { display: none; }
+      .modal-tx-table-wrap table { display: block; width: 100%; }
+      .modal-tx-table-wrap tbody { display: block; width: 100%; padding-top: 0.75rem; }
+      .modal-tx-table-wrap tbody tr {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 6px 10px;
+        padding: 10px 12px;
+        margin-bottom: 8px;
+        border-radius: 12px;
+        background: #0B0C0E;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+      }
+      .modal-tx-table-wrap tbody td {
+        display: block;
+        padding: 0 !important;
+        min-width: 0;
+      }
+      .modal-tx-table-wrap tbody td:nth-child(1) { grid-column: 1; grid-row: 1; }
+      .modal-tx-table-wrap tbody td:nth-child(4) { grid-column: 2; grid-row: 1; text-align: right; }
+      .modal-tx-table-wrap tbody td:nth-child(3) { grid-column: 1 / -1; grid-row: 2; font-size: 11px; }
+      .modal-tx-table-wrap tbody td:nth-child(2) { grid-column: 1; grid-row: 3; align-self: center; }
+      .modal-tx-table-wrap tbody td:nth-child(5) { grid-column: 2; grid-row: 3; justify-self: end; align-self: center; }
+    }
   </style>
 </head>
 <body class="min-h-screen font-sans antialiased">
   <!-- Floating Toast -->
-  <div id="toast" class="hidden fixed bottom-5 right-5 z-50 max-w-sm px-4 py-3 rounded-xl shadow-2xl border text-xs font-medium"></div>
+  <div id="toast" class="hidden fixed bottom-20 sm:bottom-5 left-4 right-4 sm:left-auto sm:right-5 z-50 sm:max-w-sm px-4 py-3 rounded-xl shadow-2xl border text-xs font-medium"></div>
 
   <!-- Day Transactions Modal -->
-  <div id="day-tx-modal-backdrop" onclick="handleBackdropClick(event, closeDayTransactionsModal)" class="hidden fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
-    <div id="day-tx-modal" onclick="event.stopPropagation()" class="w-full max-w-4xl bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
-      <div class="flex items-center justify-between px-5 py-4 border-b border-slate-800">
+  <div id="day-tx-modal-backdrop" onclick="handleBackdropClick(event, closeDayTransactionsModal)" class="hidden fixed inset-0 bg-black/70 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+    <div id="day-tx-modal" onclick="event.stopPropagation()" class="w-full max-w-4xl bg-slate-900 border border-slate-700 rounded-t-2xl sm:rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[88vh]">
+      <div data-sheet-handle class="sm:hidden w-10 h-1 rounded-full bg-white/20 mx-auto mt-2.5 shrink-0"></div>
+      <div data-sheet-handle class="flex items-center justify-between gap-3 px-5 py-3.5 sm:py-4 border-b border-slate-800">
         <div>
           <h2 id="day-modal-title" class="text-base font-bold text-white">Transactions</h2>
           <div id="day-modal-summary" class="text-xs text-slate-400 mt-1 flex flex-wrap gap-3"></div>
         </div>
-        <button onclick="closeDayTransactionsModal()" class="text-slate-400 hover:text-white text-2xl leading-none px-1">&times;</button>
+        <div class="flex items-center gap-2 shrink-0">
+          <label id="day-modal-hide-self-lbl" title="Tick to hide self-transfer rows from the table" class="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-slate-700 bg-slate-800/80 hover:bg-slate-800 text-xs font-medium text-slate-300 hover:text-white cursor-pointer select-none transition whitespace-nowrap">
+            <input id="day-modal-hide-self-cb" type="checkbox" onchange="toggleHideSelfTransfers(this.checked)" class="w-3.5 h-3.5 rounded border-slate-600 bg-slate-950 accent-[#5E6AD2] cursor-pointer" />
+            <span>Hide Self</span>
+            <span id="day-modal-self-count" class="text-[10px] font-mono-num text-slate-400"></span>
+          </label>
+          <button id="day-modal-add-btn" type="button" onclick="openAddTransactionFromDayModal()" class="hidden inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#5E6AD2] hover:bg-[#6E7AE2] text-xs font-medium text-white transition whitespace-nowrap">+ Add Transaction</button>
+          <button type="button" onclick="closeDayTransactionsModal()" aria-label="Close" class="text-slate-400 hover:text-white text-2xl leading-none px-1">&times;</button>
+        </div>
       </div>
-      <div class="p-4 sm:p-5 overflow-y-auto overflow-x-hidden">
+      <div tabindex="0" role="region" aria-label="Day transactions" class="modal-tx-table-wrap px-4 pb-4 sm:px-5 sm:pb-5 overflow-y-auto overflow-x-hidden">
         <table class="w-full table-fixed text-xs text-left">
-          <thead class="text-slate-400 border-b border-slate-800">
+          <thead class="text-slate-400 border-b border-slate-800 sticky top-0 bg-slate-900 z-10">
             <tr>
-              <th class="pb-2 w-[30%]">Merchant</th>
-              <th class="pb-2 w-[20%]">Category</th>
-              <th class="pb-2 w-[14%]">Account</th>
-              <th class="pb-2 w-[14%] text-right">Amount</th>
-              <th class="pb-2 w-[22%] text-right">Actions</th>
+              <th onclick="toggleDayModalSort('merchant')" class="pt-3 pb-2.5 pr-2 w-[30%] cursor-pointer select-none hover:text-white">Merchant <span id="day-sort-ind-merchant" class="text-[10px] text-slate-600">↕</span></th>
+              <th onclick="toggleDayModalSort('category')" class="pt-3 pb-2.5 pr-2 w-[20%] cursor-pointer select-none hover:text-white">Category <span id="day-sort-ind-category" class="text-[10px] text-slate-600">↕</span></th>
+              <th onclick="toggleDayModalSort('account')" class="pt-3 pb-2.5 pr-2 w-[14%] cursor-pointer select-none hover:text-white">Account <span id="day-sort-ind-account" class="text-[10px] text-slate-600">↕</span></th>
+              <th onclick="toggleDayModalSort('amount')" class="pt-3 pb-2.5 pr-2 w-[14%] text-right cursor-pointer select-none hover:text-white">Amount <span id="day-sort-ind-amount" class="text-[10px] text-slate-600">↕</span></th>
+              <th class="pt-3 pb-2.5 w-[22%] text-right">Actions</th>
             </tr>
           </thead>
           <tbody id="day-modal-tbody" class="divide-y divide-slate-800/70"></tbody>
@@ -369,14 +458,14 @@
         </div>
         <button onclick="closeEmailEntriesModal()" class="text-slate-400 hover:text-white text-2xl leading-none px-1">&times;</button>
       </div>
-      <div class="p-5 overflow-y-auto">
+      <div tabindex="0" role="region" aria-label="Account transactions" class="modal-tx-table-wrap px-4 pb-4 sm:px-5 sm:pb-5 overflow-y-auto overflow-x-hidden">
         <table class="w-full text-xs text-left">
-          <thead class="text-slate-400 border-b border-slate-800">
+          <thead class="text-slate-400 border-b border-slate-800 sticky top-0 bg-slate-900 z-10">
             <tr>
-              <th class="pb-2">Date</th>
-              <th class="pb-2">Email Subject / Category</th>
-              <th class="pb-2">Details</th>
-              <th class="pb-2 text-right">Amount (MYR)</th>
+              <th onclick="toggleEmailModalSort('date')" class="pt-3 pb-2.5 pr-2 cursor-pointer select-none hover:text-white">Date <span id="email-sort-ind-date" class="text-[10px] text-sky-400">▼</span></th>
+              <th onclick="toggleEmailModalSort('subject')" class="pt-3 pb-2.5 pr-2 cursor-pointer select-none hover:text-white">Email Subject / Category <span id="email-sort-ind-subject" class="text-[10px] text-slate-600">↕</span></th>
+              <th onclick="toggleEmailModalSort('merchant')" class="pt-3 pb-2.5 pr-2 cursor-pointer select-none hover:text-white">Details <span id="email-sort-ind-merchant" class="text-[10px] text-slate-600">↕</span></th>
+              <th onclick="toggleEmailModalSort('amount')" class="pt-3 pb-2.5 text-right cursor-pointer select-none hover:text-white">Amount (MYR) <span id="email-sort-ind-amount" class="text-[10px] text-slate-600">↕</span></th>
             </tr>
           </thead>
           <tbody id="email-modal-tbody" class="divide-y divide-slate-800/70"></tbody>
@@ -386,9 +475,10 @@
   </div>
 
   <!-- Account Transactions Modal (with Month & Type Filters) -->
-  <div id="account-tx-modal-backdrop" onclick="handleBackdropClick(event, closeAccountTransactionsModal)" class="hidden fixed inset-0 bg-black/75 z-50 flex items-center justify-center p-4">
-    <div onclick="event.stopPropagation()" class="w-full max-w-4xl bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[88vh]">
-      <div class="flex items-center justify-between px-5 py-4 border-b border-slate-800 shrink-0">
+  <div id="account-tx-modal-backdrop" onclick="handleBackdropClick(event, closeAccountTransactionsModal)" class="hidden fixed inset-0 bg-black/75 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+    <div id="account-tx-modal" onclick="event.stopPropagation()" class="w-full max-w-4xl bg-slate-900 border border-slate-700 rounded-t-2xl sm:rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+      <div data-sheet-handle class="sm:hidden w-10 h-1 rounded-full bg-white/20 mx-auto mt-2.5 shrink-0"></div>
+      <div data-sheet-handle class="flex items-center justify-between px-5 py-3.5 sm:py-4 border-b border-slate-800 shrink-0">
         <div>
           <h2 id="acct-modal-title" class="text-base font-bold text-white">Account Transactions</h2>
           <div id="acct-modal-summary" class="text-xs text-slate-400 mt-1 flex flex-wrap gap-3"></div>
@@ -411,16 +501,20 @@
           <option value="">All Categories</option>
         </select>
         <input id="acct-modal-search" oninput="renderAccountModalRows()" type="text" placeholder="Filter merchant or subject..." class="flex-1 min-w-[160px] bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white" />
+        <label id="acct-modal-hide-self-lbl" title="Tick to hide self-transfer rows from the table" class="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-slate-700 bg-slate-900 hover:bg-slate-800 text-xs font-medium text-slate-300 hover:text-white cursor-pointer select-none transition whitespace-nowrap">
+          <input id="acct-modal-hide-self-cb" type="checkbox" onchange="toggleHideSelfTransfers(this.checked)" class="w-3.5 h-3.5 rounded border-slate-600 bg-slate-950 accent-[#5E6AD2] cursor-pointer" />
+          <span>Hide Self</span>
+        </label>
       </div>
-      <div class="p-5 overflow-y-auto">
+      <div tabindex="0" role="region" aria-label="Account transactions" class="modal-tx-table-wrap px-4 pb-4 sm:px-5 sm:pb-5 overflow-y-auto overflow-x-hidden">
         <table class="w-full table-fixed text-xs text-left">
-          <thead class="text-slate-400 border-b border-slate-800">
+          <thead class="text-slate-400 border-b border-slate-800 sticky top-0 bg-slate-900 z-10">
             <tr>
-              <th class="pb-2 w-[34%]">Merchant</th>
-              <th class="pb-2 w-[20%]">Category</th>
-              <th class="pb-2 w-[12%]">Date</th>
-              <th class="pb-2 w-[14%] text-right">Amount</th>
-              <th class="pb-2 w-[20%] text-right">Actions</th>
+              <th onclick="toggleAcctModalSort('merchant')" class="pt-3 pb-2.5 pr-2 w-[34%] cursor-pointer select-none hover:text-white">Merchant <span id="acct-sort-ind-merchant" class="text-[10px] text-slate-600">↕</span></th>
+              <th onclick="toggleAcctModalSort('category')" class="pt-3 pb-2.5 pr-2 w-[20%] cursor-pointer select-none hover:text-white">Category <span id="acct-sort-ind-category" class="text-[10px] text-slate-600">↕</span></th>
+              <th onclick="toggleAcctModalSort('date')" class="pt-3 pb-2.5 pr-2 w-[12%] cursor-pointer select-none hover:text-white">Date <span id="acct-sort-ind-date" class="text-[10px] text-sky-400">▼</span></th>
+              <th onclick="toggleAcctModalSort('amount')" class="pt-3 pb-2.5 pr-2 w-[14%] text-right cursor-pointer select-none hover:text-white">Amount <span id="acct-sort-ind-amount" class="text-[10px] text-slate-600">↕</span></th>
+              <th class="pt-3 pb-2.5 w-[20%] text-right">Actions</th>
             </tr>
           </thead>
           <tbody id="acct-modal-tbody" class="divide-y divide-slate-800/70"></tbody>
@@ -535,14 +629,52 @@
             <option value="income">Income / Allowance (+)</option>
           </select>
         </div>
-        <div>
-          <label for="edit-cat-budget" class="block text-xs text-slate-300 font-medium mb-1">Monthly Sub-Budget Cap (RM, optional)</label>
-          <input id="edit-cat-budget" type="number" step="10" min="0" placeholder="e.g. 800 (leave blank for no cap)" class="w-full bg-slate-950 border border-slate-700 focus:border-sky-500 focus:outline-none rounded-lg px-3 py-2 text-xs text-white" />
+        <div class="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-3 items-end">
+          <div>
+            <label for="edit-cat-budget" class="block text-xs text-slate-300 font-medium mb-1">Monthly Sub-Budget Cap (RM, optional)</label>
+            <input id="edit-cat-budget" type="number" step="10" min="0" placeholder="e.g. 800 (leave blank for no cap)" class="w-full bg-slate-950 border border-slate-700 focus:border-sky-500 focus:outline-none rounded-lg px-3 py-2 text-xs text-white" />
+          </div>
+          <div>
+            <label for="edit-cat-color" class="block text-xs text-slate-300 font-medium mb-1">Color</label>
+            <input id="edit-cat-color" type="color" value="#5E6AD2" class="h-9 w-14 bg-slate-950 border border-slate-700 rounded-lg p-1 cursor-pointer" />
+          </div>
+        </div>
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+          <div>
+            <label for="edit-cat-day-min" class="block text-[11px] text-slate-400 font-medium mb-1">Day From</label>
+            <input id="edit-cat-day-min" type="number" min="1" max="31" placeholder="1" class="w-full bg-slate-950 border border-slate-700 focus:border-sky-500 focus:outline-none rounded-lg px-2.5 py-1.5 text-xs text-white" />
+          </div>
+          <div>
+            <label for="edit-cat-day-max" class="block text-[11px] text-slate-400 font-medium mb-1">Day To</label>
+            <input id="edit-cat-day-max" type="number" min="1" max="31" placeholder="10" class="w-full bg-slate-950 border border-slate-700 focus:border-sky-500 focus:outline-none rounded-lg px-2.5 py-1.5 text-xs text-white" />
+          </div>
+          <div>
+            <label for="edit-cat-amt-min" class="block text-[11px] text-slate-400 font-medium mb-1">Min RM</label>
+            <input id="edit-cat-amt-min" type="number" step="0.01" min="0" placeholder="900" class="w-full bg-slate-950 border border-slate-700 focus:border-sky-500 focus:outline-none rounded-lg px-2.5 py-1.5 text-xs text-white" />
+          </div>
+          <div>
+            <label for="edit-cat-amt-max" class="block text-[11px] text-slate-400 font-medium mb-1">Max RM</label>
+            <input id="edit-cat-amt-max" type="number" step="0.01" min="0" placeholder="900" class="w-full bg-slate-950 border border-slate-700 focus:border-sky-500 focus:outline-none rounded-lg px-2.5 py-1.5 text-xs text-white" />
+          </div>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <div>
+            <label for="edit-cat-direction" class="block text-[11px] text-slate-400 font-medium mb-1">Match Direction</label>
+            <select id="edit-cat-direction" class="w-full bg-slate-950 border border-slate-700 focus:border-sky-500 focus:outline-none rounded-lg px-2.5 py-1.5 text-xs text-white">
+              <option value="any">Any (In or Out)</option>
+              <option value="expense">Money Out only</option>
+              <option value="income">Money In only</option>
+            </select>
+          </div>
+          <div>
+            <label for="edit-cat-account" class="block text-[11px] text-slate-400 font-medium mb-1">Account Filter (optional)</label>
+            <input id="edit-cat-account" type="text" placeholder="e.g. Touch 'n Go, Ryt Bank" class="w-full bg-slate-950 border border-slate-700 focus:border-sky-500 focus:outline-none rounded-lg px-2.5 py-1.5 text-xs text-white" />
+          </div>
         </div>
         <div>
-          <label for="edit-cat-keywords" class="block text-xs text-slate-300 font-medium mb-1">Auto-Tag Keywords (comma-separated)</label>
-          <textarea id="edit-cat-keywords" rows="3" placeholder="e.g. grab, bolt, rapidkl, mrt" class="w-full bg-slate-950 border border-slate-700 focus:border-sky-500 focus:outline-none rounded-lg px-3 py-2 text-xs text-white"></textarea>
-          <p class="text-[11px] text-slate-400 mt-1">Saving will automatically re-tag matching transactions in your ledger.</p>
+          <label for="edit-cat-keywords" class="block text-xs text-slate-300 font-medium mb-1">Keywords (optional, comma-separated)</label>
+          <textarea id="edit-cat-keywords" rows="2" placeholder="e.g. grab, shopee (leave blank to match by day/amount/direction only)" class="w-full bg-slate-950 border border-slate-700 focus:border-sky-500 focus:outline-none rounded-lg px-3 py-2 text-xs text-white"></textarea>
+          <p class="text-[11px] text-slate-400 mt-1">All filled conditions must match. More specific rules run before keyword-only rules.</p>
         </div>
       </div>
       <div class="flex justify-end gap-2 pt-1">
@@ -700,26 +832,24 @@
     <!-- Top Header & Net Worth Strip -->
     <header class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b border-slate-800 pb-4">
       <div class="flex items-center gap-3">
-        <div class="w-8 h-8 rounded-lg bg-[#5E6AD2]/15 border border-[#5E6AD2]/30 flex items-center justify-center text-[#818CF8]">
-          <i data-lucide="layers" class="w-4 h-4"></i>
-        </div>
+        <img src="/static/logo.png" alt="Personal ERP logo" class="w-9 h-9 rounded-lg object-cover border border-white/[0.1] shrink-0" />
         <div>
           <h1 class="text-lg font-semibold tracking-tight text-[#F7F8F8]">Personal ERP</h1>
           <p class="text-[11px] text-[#6B7280]">Wealth · Assets · Kitchen · Trainer · Friction</p>
         </div>
       </div>
-      <div class="grid grid-cols-3 gap-2.5 text-right">
-        <div class="bg-[#111216] border border-white/[0.07] rounded-xl px-3.5 py-2">
-          <div class="text-[10px] uppercase tracking-wider text-[#6B7280]">Liquid Cash</div>
-          <div id="nw-cash" class="text-sm font-semibold font-mono-num text-[#34D399] mt-0.5">RM 0.00</div>
+      <div class="grid grid-cols-3 gap-1.5 sm:gap-2.5 text-right">
+        <div class="bg-[#111216] border border-white/[0.07] rounded-xl px-2.5 sm:px-3.5 py-2 min-w-0">
+          <div class="text-[9px] sm:text-[10px] uppercase tracking-wider text-[#6B7280] truncate">Liquid Cash</div>
+          <div id="nw-cash" class="text-xs sm:text-sm font-semibold font-mono-num text-[#34D399] mt-0.5 truncate">RM 0.00</div>
         </div>
-        <div class="bg-[#111216] border border-white/[0.07] rounded-xl px-3.5 py-2">
-          <div class="text-[10px] uppercase tracking-wider text-[#6B7280]">Tracked Assets</div>
-          <div id="nw-assets" class="text-sm font-semibold font-mono-num text-[#9CA3AF] mt-0.5">RM 0.00</div>
+        <div class="bg-[#111216] border border-white/[0.07] rounded-xl px-2.5 sm:px-3.5 py-2 min-w-0">
+          <div class="text-[9px] sm:text-[10px] uppercase tracking-wider text-[#6B7280] truncate">Tracked Assets</div>
+          <div id="nw-assets" class="text-xs sm:text-sm font-semibold font-mono-num text-[#9CA3AF] mt-0.5 truncate">RM 0.00</div>
         </div>
-        <div class="bg-[#111216] border border-[#5E6AD2]/40 rounded-xl px-3.5 py-2">
-          <div class="text-[10px] uppercase tracking-wider text-[#818CF8]">Total Net Worth</div>
-          <div id="nw-total" class="text-sm font-semibold font-mono-num text-[#F7F8F8] mt-0.5">RM 0.00</div>
+        <div class="bg-[#111216] border border-[#5E6AD2]/40 rounded-xl px-2.5 sm:px-3.5 py-2 min-w-0">
+          <div class="text-[9px] sm:text-[10px] uppercase tracking-wider text-[#818CF8] truncate">Total Net Worth</div>
+          <div id="nw-total" class="text-xs sm:text-sm font-semibold font-mono-num text-[#F7F8F8] mt-0.5 truncate">RM 0.00</div>
         </div>
       </div>
     </header>
@@ -738,18 +868,18 @@
     </div>
 
     <!-- Navigation Tabs -->
-    <nav aria-label="Primary" class="flex flex-wrap items-center gap-1.5 border-b border-white/[0.07] pb-3">
-      <button id="tab-wealth" aria-current="page" onclick="switchTab('wealth')" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-[#1E1F25] text-[#F7F8F8] border border-white/[0.12]"><i data-lucide="wallet" aria-hidden="true" class="w-3.5 h-3.5 text-[#818CF8]"></i><span>Wealth Ledger</span></button>
-      <button id="tab-assets" onclick="switchTab('assets')" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-[#9CA3AF] hover:text-[#F7F8F8] hover:bg-white/[0.04] border border-transparent"><i data-lucide="package" class="w-3.5 h-3.5"></i><span>Asset Tracker</span></button>
-      <button id="tab-kitchen" onclick="switchTab('kitchen')" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-[#9CA3AF] hover:text-[#F7F8F8] hover:bg-white/[0.04] border border-transparent"><i data-lucide="utensils" class="w-3.5 h-3.5"></i><span>Kitchen Matrix</span></button>
-      <button id="tab-trainer" onclick="switchTab('trainer')" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-[#9CA3AF] hover:text-[#F7F8F8] hover:bg-white/[0.04] border border-transparent"><i data-lucide="dumbbell" class="w-3.5 h-3.5"></i><span>Physical Trainer</span></button>
-      <button id="tab-friction" onclick="switchTab('friction')" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-[#9CA3AF] hover:text-[#F7F8F8] hover:bg-white/[0.04] border border-transparent"><i data-lucide="car" class="w-3.5 h-3.5"></i><span>Friction &amp; Debt</span></button>
-      <button id="tab-resolve" onclick="switchTab('resolve')" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-[#9CA3AF] hover:text-[#F7F8F8] hover:bg-white/[0.04] border border-transparent">
+    <nav aria-label="Primary" class="flex flex-nowrap sm:flex-wrap overflow-x-auto no-scrollbar items-center gap-1.5 border-b border-white/[0.07] pb-3 -mx-4 px-4 sm:mx-0 sm:px-0">
+      <button id="tab-wealth" aria-current="page" onclick="switchTab('wealth')" class="shrink-0 whitespace-nowrap inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-[#1E1F25] text-[#F7F8F8] border border-white/[0.12]"><i data-lucide="wallet" aria-hidden="true" class="w-3.5 h-3.5 text-[#818CF8]"></i><span>Wealth Ledger</span></button>
+      <button id="tab-assets" onclick="switchTab('assets')" class="shrink-0 whitespace-nowrap inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-[#9CA3AF] hover:text-[#F7F8F8] hover:bg-white/[0.04] border border-transparent"><i data-lucide="package" class="w-3.5 h-3.5"></i><span>Asset Tracker</span></button>
+      <button id="tab-kitchen" onclick="switchTab('kitchen')" class="shrink-0 whitespace-nowrap inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-[#9CA3AF] hover:text-[#F7F8F8] hover:bg-white/[0.04] border border-transparent"><i data-lucide="utensils" class="w-3.5 h-3.5"></i><span>Kitchen Matrix</span></button>
+      <button id="tab-trainer" onclick="switchTab('trainer')" class="shrink-0 whitespace-nowrap inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-[#9CA3AF] hover:text-[#F7F8F8] hover:bg-white/[0.04] border border-transparent"><i data-lucide="dumbbell" class="w-3.5 h-3.5"></i><span>Physical Trainer</span></button>
+      <button id="tab-friction" onclick="switchTab('friction')" class="shrink-0 whitespace-nowrap inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-[#9CA3AF] hover:text-[#F7F8F8] hover:bg-white/[0.04] border border-transparent"><i data-lucide="car" class="w-3.5 h-3.5"></i><span>Friction &amp; Debt</span></button>
+      <button id="tab-resolve" onclick="switchTab('resolve')" class="shrink-0 whitespace-nowrap inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-[#9CA3AF] hover:text-[#F7F8F8] hover:bg-white/[0.04] border border-transparent">
         <i data-lucide="git-merge" class="w-3.5 h-3.5"></i>
         <span>Resolve Duplicates</span>
         <span id="nav-conflicts-badge" class="hidden px-1.5 py-0.5 rounded-full text-[10px] font-mono-num font-semibold bg-[#FBBF24]/20 text-[#FBBF24] border border-[#FBBF24]/30">0</span>
       </button>
-      <button id="tab-settings" onclick="switchTab('settings')" class="ml-auto inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-[#9CA3AF] hover:text-[#F7F8F8] hover:bg-white/[0.04] border border-transparent"><i data-lucide="settings" class="w-3.5 h-3.5"></i><span>Settings</span></button>
+      <button id="tab-settings" onclick="switchTab('settings')" class="shrink-0 whitespace-nowrap sm:ml-auto inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-[#9CA3AF] hover:text-[#F7F8F8] hover:bg-white/[0.04] border border-transparent"><i data-lucide="settings" class="w-3.5 h-3.5"></i><span>Settings</span></button>
     </nav>
 
     <!-- Floating Bottom Action Dock (Wealth Ledger) -->
@@ -769,32 +899,33 @@
         </button>
       </div>
 
-      <button type="button" onclick="openAddTransactionModal('one_off', 'expense')" class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#5E6AD2] hover:bg-[#6E7AE2] text-xs font-medium text-white shadow-lg shadow-[#5E6AD2]/25 transition whitespace-nowrap">
+      <button type="button" onclick="openAddTransactionModal('one_off', 'expense')" class="inline-flex items-center gap-1.5 px-3 sm:px-3.5 py-2 rounded-xl bg-[#5E6AD2] hover:bg-[#6E7AE2] text-xs font-medium text-white shadow-lg shadow-[#5E6AD2]/25 transition whitespace-nowrap">
         <i data-lucide="plus" aria-hidden="true" class="w-3.5 h-3.5"></i>
-        <span>Add Transaction</span>
+        <span class="sm:hidden">Add</span>
+        <span class="hidden sm:inline">Add Transaction</span>
       </button>
     </div>
 
     <!-- 1. WEALTH LEDGER (CLEAN MAIN VIEW BY MONTH) -->
     <section id="panel-wealth" class="space-y-4 pb-24">
 
-      <!-- KPIs -->
-      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-        <div onclick="openKpiTransactionsModal('income')" title="Click to view all income transactions" class="glow-card cursor-pointer bg-[#111216] border border-white/[0.07] rounded-xl p-4">
+      <!-- KPIs (Swipeable Snap Deck on Mobile, Grid on Desktop) -->
+      <div role="region" aria-label="Monthly summary cards" tabindex="0" class="flex overflow-x-auto snap-x snap-mandatory no-scrollbar gap-3 -mx-4 px-4 pb-1 sm:pb-0 sm:mx-0 sm:px-0 sm:grid sm:grid-cols-2 lg:grid-cols-4">
+        <div onclick="openKpiTransactionsModal('income')" title="Click to view all income transactions" class="flex-[0_0_78%] snap-start sm:flex-auto glow-card cursor-pointer bg-[#111216] border border-white/[0.07] rounded-xl p-4">
           <div class="flex items-center justify-between">
             <span class="text-[11px] uppercase tracking-wider text-[#6B7280]">Income</span>
             <i data-lucide="arrow-down-left" class="w-3.5 h-3.5 text-[#34D399]/70"></i>
           </div>
           <div id="kpi-income" class="text-xl font-semibold font-mono-num text-[#34D399] mt-1.5">RM 0.00</div>
         </div>
-        <div onclick="openKpiTransactionsModal('repayment')" title="Click to view all repayment transactions" class="glow-card cursor-pointer bg-[#111216] border border-white/[0.07] rounded-xl p-4">
+        <div onclick="openKpiTransactionsModal('repayment')" title="Click to view all repayment transactions" class="flex-[0_0_78%] snap-start sm:flex-auto glow-card cursor-pointer bg-[#111216] border border-white/[0.07] rounded-xl p-4">
           <div class="flex items-center justify-between">
             <span class="text-[11px] uppercase tracking-wider text-[#6B7280]">Repayment</span>
             <i data-lucide="repeat" class="w-3.5 h-3.5 text-[#818CF8]/70"></i>
           </div>
           <div id="kpi-repayment" class="text-xl font-semibold font-mono-num text-[#818CF8] mt-1.5">RM 0.00</div>
         </div>
-        <div onclick="openKpiTransactionsModal('expense')" title="Click to view all expense transactions" class="glow-card cursor-pointer bg-[#111216] border border-white/[0.07] rounded-xl p-4">
+        <div onclick="openKpiTransactionsModal('expense')" title="Click to view all expense transactions" class="flex-[0_0_78%] snap-start sm:flex-auto glow-card cursor-pointer bg-[#111216] border border-white/[0.07] rounded-xl p-4">
           <div class="flex items-center justify-between">
             <span class="text-[11px] uppercase tracking-wider text-[#6B7280]">Expense</span>
             <span id="kpi-expense-gross" class="hidden text-[10px] font-mono-num text-[#6B7280] line-through"></span>
@@ -805,7 +936,7 @@
           </div>
           <div id="kpi-expense-sub" class="text-[10px] font-mono-num text-[#6B7280] mt-1"></div>
         </div>
-        <div onclick="openKpiTransactionsModal('burn')" title="Click to view expenses driving daily burn" class="glow-card cursor-pointer bg-[#111216] border border-white/[0.07] rounded-xl p-4">
+        <div onclick="openKpiTransactionsModal('burn')" title="Click to view expenses driving daily burn" class="flex-[0_0_78%] snap-start sm:flex-auto glow-card cursor-pointer bg-[#111216] border border-white/[0.07] rounded-xl p-4">
           <div class="flex items-center justify-between">
             <span class="text-[11px] uppercase tracking-wider text-[#6B7280]">Daily Burn</span>
             <i data-lucide="activity" class="w-3.5 h-3.5 text-[#9CA3AF]/70"></i>
@@ -814,7 +945,7 @@
         </div>
       </div>
 
-      <!-- Individual Bank Account Balances (Flattened, no nested card wrapper) -->
+      <!-- Individual Bank Account Balances (Swipeable Snap Carousel on Mobile) -->
       <div class="space-y-2.5 pt-1">
         <div class="flex items-center justify-between">
           <h2 class="text-xs font-semibold uppercase tracking-wider text-[#9CA3AF]">Bank &amp; E-Wallet Balances</h2>
@@ -823,7 +954,7 @@
             <i data-lucide="arrow-right" class="w-3 h-3"></i>
           </button>
         </div>
-        <div id="account-balances-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5"></div>
+        <div id="account-balances-grid" role="region" aria-label="Bank and e-wallet balances" tabindex="0" class="flex overflow-x-auto snap-x snap-mandatory no-scrollbar gap-2.5 -mx-4 px-4 pb-1 sm:pb-0 sm:mx-0 sm:px-0 sm:grid sm:grid-cols-2 lg:grid-cols-4"></div>
       </div>
 
       <!-- Charts -->
@@ -851,9 +982,12 @@
           <div id="cashflow-calendar-wrap" class="hidden"></div>
         </div>
         <div class="bg-[#111216] border border-white/[0.07] rounded-xl p-4">
-          <div class="flex items-center justify-between mb-3">
+          <div class="flex items-center justify-between mb-3 gap-2">
             <h3 class="text-sm font-semibold text-[#F7F8F8]">Expense by Category</h3>
-            <span class="text-[11px] text-[#6B7280]">Click slice</span>
+            <div class="flex items-center gap-2">
+              <button id="cat-filter-reset" type="button" onclick="resetExcludedCategories()" class="hidden text-[10px] px-1.5 py-0.5 rounded bg-[#5E6AD2]/15 hover:bg-[#5E6AD2]/30 border border-[#5E6AD2]/35 text-[#818CF8] transition">Show all</button>
+              <span class="text-[11px] text-[#6B7280]">Click slice · Legend toggles</span>
+            </div>
           </div>
           <canvas id="category-chart" height="195" class="cursor-pointer"></canvas>
           <div id="category-budgets-wrap" class="mt-3 pt-3 border-t border-white/[0.06] space-y-2 hidden"></div>
@@ -881,11 +1015,11 @@
       <!-- Recent Ledger Entries (Staff-Level Integrated Filter & Distribution) -->
       <div class="bg-[#111216] border border-white/[0.07] rounded-xl p-4 space-y-3">
         <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-2.5">
-          <div class="flex flex-wrap items-center gap-2.5">
+          <div class="flex flex-wrap items-center gap-2.5 w-full">
             <h3 class="text-sm font-semibold text-[#F7F8F8]">Transactions</h3>
-            <div class="relative">
+            <div class="relative w-full sm:w-auto">
               <i data-lucide="search" class="w-3.5 h-3.5 text-[#6B7280] absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none"></i>
-              <input id="entry-search" oninput="renderEntriesTable()" type="text" placeholder="Search merchant, category, amount..." class="bg-[#0B0C0E] border border-white/[0.09] rounded-lg pl-8 pr-3 py-1.5 text-xs text-[#F7F8F8] w-64 max-w-full" />
+              <input id="entry-search" oninput="renderEntriesTable()" type="text" placeholder="Search merchant, category, amount..." class="bg-[#0B0C0E] border border-white/[0.09] rounded-lg pl-8 pr-3 py-1.5 text-xs text-[#F7F8F8] w-full sm:w-64" />
             </div>
             <select id="entry-filter" onchange="renderEntriesTable()" class="hidden">
               <option value="all">All</option>
@@ -895,7 +1029,11 @@
               <option value="claimable">Business Claimable</option>
               <option value="self_transfer">Self Transfers</option>
             </select>
-            <div id="entry-filter-pills" class="flex flex-wrap items-center gap-1"></div>
+            <div id="entry-filter-pills" class="flex flex-nowrap sm:flex-wrap overflow-x-auto no-scrollbar items-center gap-1 w-full sm:w-auto pb-0.5 sm:pb-0"></div>
+            <label id="main-hide-self-lbl" title="Tick to hide self-transfer rows from the table" class="sm:ml-auto inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-white/[0.09] bg-[#0B0C0E] hover:bg-white/[0.04] text-[11px] font-medium text-[#9CA3AF] hover:text-[#F7F8F8] cursor-pointer select-none transition whitespace-nowrap shrink-0">
+              <input id="main-hide-self-cb" type="checkbox" onchange="toggleHideSelfTransfers(this.checked)" class="w-3.5 h-3.5 rounded border-slate-600 bg-slate-950 accent-[#5E6AD2] cursor-pointer" />
+              <span>Hide Self</span>
+            </label>
           </div>
         </div>
 
@@ -908,7 +1046,7 @@
           </div>
         </div>
 
-        <div class="max-h-96 overflow-y-auto overflow-x-hidden">
+        <div tabindex="0" role="region" aria-label="Transactions" class="tx-table-wrap max-h-[32rem] sm:max-h-96 overflow-y-auto overflow-x-hidden">
           <table class="w-full table-fixed text-left text-xs">
             <thead class="text-[#6B7280] border-b border-white/[0.07] sticky top-0 bg-[#111216] z-10">
               <tr>
@@ -1002,12 +1140,22 @@
         </button>
       </div>
 
-      <div id="recipe-box" class="hidden bg-slate-900 border border-amber-500/30 rounded-2xl p-5 space-y-2">
+      <div id="recipe-box" class="hidden bg-slate-900 border border-amber-500/30 rounded-2xl p-5 space-y-3">
         <div class="flex items-center justify-between">
           <h3 id="recipe-title" class="text-base font-bold text-amber-300"></h3>
           <span id="recipe-engine" class="text-xs px-2 py-0.5 rounded-full bg-slate-800 text-slate-300"></span>
         </div>
+        <div id="recipe-taste-notes" class="hidden text-xs text-emerald-300 bg-emerald-950/30 border border-emerald-500/20 rounded-xl p-3 space-y-1"></div>
         <pre id="recipe-body" class="text-sm text-slate-200 whitespace-pre-wrap font-sans"></pre>
+        <div class="pt-2 border-t border-slate-800 flex flex-wrap items-center gap-2">
+          <span class="text-xs text-slate-400 mr-1">Teach the Taste AI:</span>
+          <button onclick="submitTasteFeedback('loved')" class="text-xs px-2.5 py-1 rounded-lg bg-emerald-700/40 hover:bg-emerald-600/60 text-emerald-200">Loved It</button>
+          <button onclick="submitTasteFeedback('balanced')" class="text-xs px-2.5 py-1 rounded-lg bg-sky-700/40 hover:bg-sky-600/60 text-sky-200">Balanced</button>
+          <button onclick="submitTasteFeedback('too_spicy')" class="text-xs px-2.5 py-1 rounded-lg bg-rose-700/40 hover:bg-rose-600/60 text-rose-200">Too Spicy</button>
+          <button onclick="submitTasteFeedback('needs_acid')" class="text-xs px-2.5 py-1 rounded-lg bg-amber-700/40 hover:bg-amber-600/60 text-amber-200">Needs Acid / Sour</button>
+          <button onclick="submitTasteFeedback('too_bland')" class="text-xs px-2.5 py-1 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200">Too Bland</button>
+          <button onclick="markMealCooked()" class="ml-auto text-xs px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold">I Cooked This (Deduct Used)</button>
+        </div>
       </div>
 
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -1035,8 +1183,97 @@
               <input id="km-name" type="text" placeholder="Item (e.g. Eggs)" required class="col-span-2 bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs" />
               <input id="km-qty" type="number" step="1" min="1" value="1" required class="bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs" />
             </div>
+            <label class="flex items-center gap-2 text-xs text-slate-400">
+              <input id="km-staple" type="checkbox" class="rounded bg-slate-950 border-slate-700" />
+              <span>Pantry Staple (never expires, not auto-deducted)</span>
+            </label>
             <button type="submit" class="w-full py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-medium text-sky-300">+ Add Item</button>
           </form>
+        </div>
+      </div>
+
+      <!-- TASTE KNOWLEDGEBASE & LEARNING BRAIN -->
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div>
+            <h3 class="text-sm font-semibold text-white">Taste Knowledgebase &amp; Palate Brain</h3>
+            <p class="text-xs text-slate-400">Learns why ingredients pair well (e.g. sour + sweet tames spicy) and adapts to your feedback.</p>
+          </div>
+          <span id="palate-feedback-badge" class="text-xs px-2.5 py-1 rounded-full bg-slate-800 text-slate-300 self-start">0 ratings learned</span>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div class="bg-slate-950 border border-slate-800 rounded-xl p-4 space-y-3">
+            <h4 class="text-xs font-semibold text-slate-300 uppercase tracking-wider">Learned Palate Profile</h4>
+            <div id="palate-bars" class="space-y-1.5 text-xs"></div>
+            <div class="pt-2 border-t border-slate-800 space-y-1.5">
+              <div class="text-xs font-semibold text-emerald-400">Active Fridge Pairings &amp; Balance Hints</div>
+              <div id="taste-analysis-list" class="space-y-1.5 text-xs text-slate-300"></div>
+            </div>
+          </div>
+
+          <div class="bg-slate-950 border border-slate-800 rounded-xl p-4 space-y-3">
+            <h4 class="text-xs font-semibold text-slate-300 uppercase tracking-wider">Teach a Pairing Rule</h4>
+            <form onsubmit="addTasteRule(event)" class="space-y-2">
+              <input id="tr-title" type="text" placeholder="Rule title (e.g. Sour + Sweet tames Spicy)" required class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs" />
+              <div class="grid grid-cols-2 gap-2">
+                <select id="tr-primary" class="bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs">
+                  <option value="spicy">When dish is: Spicy</option>
+                  <option value="richness">When dish is: Rich / Fatty</option>
+                  <option value="umami">When dish is: Umami</option>
+                  <option value="bitter">When dish is: Bitter</option>
+                  <option value="sour">When dish is: Sour</option>
+                  <option value="sweet">When dish is: Sweet</option>
+                  <option value="salty">When dish is: Salty</option>
+                </select>
+                <input id="tr-pair" type="text" placeholder="Pair with (e.g. sour,sweet)" required class="bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs" />
+              </div>
+              <input id="tr-rationale" type="text" placeholder="Why it works (e.g. Sourness & sweetness tame heat and lift flavor)" required class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs" />
+              <button type="submit" class="w-full py-1.5 rounded-lg bg-amber-600 hover:bg-amber-500 text-xs font-semibold text-white">+ Save Pairing Rule</button>
+            </form>
+            <div id="taste-rules-list" class="space-y-1.5 max-h-44 overflow-y-auto"></div>
+          </div>
+        </div>
+
+        <div class="bg-slate-950 border border-slate-800 rounded-xl p-4 space-y-3">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <h4 class="text-xs font-semibold text-slate-300 uppercase tracking-wider">Ingredient Taste Vectors (0.0 – 1.0)</h4>
+            <button onclick="autoProfileUnknownItems()" class="text-xs px-3 py-1 rounded-lg bg-emerald-700/40 hover:bg-emerald-600/60 text-emerald-200 font-medium">Auto-Profile Unknown Fridge Items</button>
+          </div>
+          <form onsubmit="addTasteProfile(event)" class="grid grid-cols-2 sm:grid-cols-6 lg:grid-cols-12 gap-2 items-end">
+            <div class="col-span-2">
+              <label class="block text-[10px] text-slate-400 mb-0.5">Ingredient</label>
+              <input id="tp-name" type="text" placeholder="e.g. Tomato" required class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs" />
+            </div>
+            <div><label class="block text-[10px] text-slate-400 mb-0.5">Sweet</label><input id="tp-sweet" type="number" step="0.1" min="0" max="1" value="0" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs" /></div>
+            <div><label class="block text-[10px] text-slate-400 mb-0.5">Sour</label><input id="tp-sour" type="number" step="0.1" min="0" max="1" value="0" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs" /></div>
+            <div><label class="block text-[10px] text-slate-400 mb-0.5">Salty</label><input id="tp-salty" type="number" step="0.1" min="0" max="1" value="0" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs" /></div>
+            <div><label class="block text-[10px] text-slate-400 mb-0.5">Umami</label><input id="tp-umami" type="number" step="0.1" min="0" max="1" value="0" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs" /></div>
+            <div><label class="block text-[10px] text-slate-400 mb-0.5">Spicy</label><input id="tp-spicy" type="number" step="0.1" min="0" max="1" value="0" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs" /></div>
+            <div><label class="block text-[10px] text-slate-400 mb-0.5">Texture</label><input id="tp-texture" type="text" placeholder="crisp" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs" /></div>
+            <div><label class="block text-[10px] text-slate-400 mb-0.5">Aroma</label><input id="tp-aroma" type="text" placeholder="citrus" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs" /></div>
+            <div><label class="block text-[10px] text-slate-400 mb-0.5">Method</label><input id="tp-method" type="text" placeholder="stir-fry" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs" /></div>
+            <div class="col-span-1"><label class="block text-[10px] text-slate-400 mb-0.5">Notes</label><input id="tp-notes" type="text" placeholder="Tames heat" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs" /></div>
+            <button type="submit" class="py-1 px-2.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-xs font-semibold text-white">Save</button>
+          </form>
+          <div id="taste-profiles-list" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 max-h-48 overflow-y-auto"></div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div class="bg-slate-950 border border-slate-800 rounded-xl p-4 space-y-2.5">
+            <h4 class="text-xs font-semibold text-slate-300 uppercase tracking-wider">Shopping List (Balance &amp; Restock)</h4>
+            <form onsubmit="addShoppingItemManual(event)" class="flex gap-2">
+              <input id="sl-name" type="text" placeholder="Item (e.g. Tomato)" required class="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs" />
+              <input id="sl-reason" type="text" placeholder="Reason (optional)" class="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs" />
+              <button type="submit" class="px-3 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-xs font-semibold text-white">+ Add</button>
+            </form>
+            <div id="shopping-list-items" class="space-y-1.5 max-h-40 overflow-y-auto"></div>
+          </div>
+
+          <div class="bg-slate-950 border border-slate-800 rounded-xl p-4 space-y-2.5">
+            <h4 class="text-xs font-semibold text-slate-300 uppercase tracking-wider">Past Meals &amp; Taste Log</h4>
+            <div id="taste-feedback-log" class="space-y-1.5 max-h-48 overflow-y-auto text-xs"></div>
+          </div>
         </div>
       </div>
     </section>
@@ -1203,10 +1440,15 @@
             <label class="block text-slate-400 mb-1">Default Daily Protein (g)</label>
             <input id="set-prot" type="number" min="30" max="400" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-white" />
           </div>
-          <div class="md:col-span-3">
+          <div class="md:col-span-2">
             <label class="block text-slate-400 mb-1">Your Bank Account Holder Name(s) (comma-separated, e.g. LIM SHIAW YONG)</label>
             <input id="set-holder-names" type="text" placeholder="e.g. LIM SHIAW YONG" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-white" />
             <div class="text-[11px] text-slate-500 mt-1">Transfers matching your name(s) are treated as Self-Transfers (excluded from Spending &amp; Income totals, while still updating individual bank balances).</div>
+          </div>
+          <div>
+            <label for="set-tng-pdf-password" class="block text-slate-400 mb-1">Touch 'n Go Statement PDF Password</label>
+            <input id="set-tng-pdf-password" type="password" autocomplete="off" placeholder="e.g. 1123456789 (mobile without +60)" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-white" />
+            <div class="text-[11px] text-slate-500 mt-1">Auto-unlocks encrypted PDF attachments from <span class="font-mono text-slate-400">ewallet@tngdigital.com.my</span> during email sync.</div>
           </div>
         </div>
       </form>
@@ -1238,34 +1480,70 @@
       <!-- Custom Categories & Keyword Auto-Tagging Rules -->
       <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
         <div>
-          <h2 class="text-base font-semibold text-white">Custom Categories &amp; Auto-Tagging Rules</h2>
-          <p class="text-xs text-slate-400">Add your own categories and comma-separated merchant keywords. Saving automatically re-tags existing transactions.</p>
+          <h2 class="text-base font-semibold text-white">Pattern-Based Category Rules</h2>
+          <p class="text-xs text-slate-400">Match transactions by day of month (e.g. 1–10, 23–30), amount range (e.g. RM 900, RM 2000), direction, account, and/or keywords. Saving re-tags existing transactions.</p>
         </div>
-        <form onsubmit="saveCategoryRule(event)" class="flex flex-wrap items-end gap-2 bg-slate-950 border border-slate-800 rounded-xl p-3">
-          <div>
-            <label class="block text-[11px] text-slate-400 mb-1">Category Name</label>
-            <input id="cat-name" type="text" placeholder="e.g. Food &amp; Beverage" required class="bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white w-48" />
+        <form onsubmit="saveCategoryRule(event)" class="space-y-2.5 bg-slate-950 border border-slate-800 rounded-xl p-3">
+          <div class="flex flex-wrap items-end gap-2">
+            <div>
+              <label class="block text-[11px] text-slate-400 mb-1">Category Name</label>
+              <input id="cat-name" type="text" placeholder="e.g. Phone Installment" required class="bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white w-44" />
+            </div>
+            <div class="flex-1 min-w-[200px]">
+              <label class="block text-[11px] text-slate-400 mb-1">Keywords (optional, comma-separated)</label>
+              <input id="cat-keywords" type="text" placeholder="e.g. shopee, spaylater (or leave blank for day+amount rules)" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white" />
+            </div>
+            <div>
+              <label class="block text-[11px] text-slate-400 mb-1">Tag As</label>
+              <select id="cat-flow-type" class="bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white">
+                <option value="auto">Auto</option>
+                <option value="expense">Expense</option>
+                <option value="repayment">Repayment</option>
+                <option value="income">Income</option>
+              </select>
+            </div>
+            <div class="w-24">
+              <label class="block text-[11px] text-slate-400 mb-1">Cap (RM)</label>
+              <input id="cat-budget" type="number" step="10" min="0" placeholder="Optional" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white" />
+            </div>
+            <div>
+              <label class="block text-[11px] text-slate-400 mb-1">Color</label>
+              <input id="cat-color" type="color" value="#5E6AD2" class="h-[30px] w-11 bg-slate-900 border border-slate-700 rounded-lg p-0.5 cursor-pointer" />
+            </div>
           </div>
-          <div class="flex-1 min-w-[220px]">
-            <label class="block text-[11px] text-slate-400 mb-1">Keywords (comma-separated)</label>
-            <input id="cat-keywords" type="text" placeholder="e.g. mixue, mcdonald, kfc, zus, kopitiam" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white" />
+          <div class="flex flex-wrap items-end gap-2">
+            <div class="w-20">
+              <label class="block text-[11px] text-slate-400 mb-1">Day From</label>
+              <input id="cat-day-min" type="number" min="1" max="31" placeholder="1" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white" />
+            </div>
+            <div class="w-20">
+              <label class="block text-[11px] text-slate-400 mb-1">Day To</label>
+              <input id="cat-day-max" type="number" min="1" max="31" placeholder="10" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white" />
+            </div>
+            <div class="w-24">
+              <label class="block text-[11px] text-slate-400 mb-1">Min RM</label>
+              <input id="cat-amt-min" type="number" step="0.01" min="0" placeholder="900" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white" />
+            </div>
+            <div class="w-24">
+              <label class="block text-[11px] text-slate-400 mb-1">Max RM</label>
+              <input id="cat-amt-max" type="number" step="0.01" min="0" placeholder="900" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white" />
+            </div>
+            <div>
+              <label class="block text-[11px] text-slate-400 mb-1">Match Direction</label>
+              <select id="cat-direction" class="bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white">
+                <option value="any">Any</option>
+                <option value="expense">Money Out</option>
+                <option value="income">Money In</option>
+              </select>
+            </div>
+            <div class="flex-1 min-w-[140px]">
+              <label class="block text-[11px] text-slate-400 mb-1">Account (optional)</label>
+              <input id="cat-account" type="text" placeholder="e.g. Ryt Bank" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white" />
+            </div>
+            <button type="submit" class="px-4 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-xs font-semibold text-white">
+              Save Rule
+            </button>
           </div>
-          <div>
-            <label class="block text-[11px] text-slate-400 mb-1">Type</label>
-            <select id="cat-flow-type" class="bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white">
-              <option value="auto">Auto</option>
-              <option value="expense">Expense</option>
-              <option value="repayment">Repayment</option>
-              <option value="income">Income</option>
-            </select>
-          </div>
-          <div class="w-28">
-            <label class="block text-[11px] text-slate-400 mb-1">Cap (RM)</label>
-            <input id="cat-budget" type="number" step="10" min="0" placeholder="Optional" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white" />
-          </div>
-          <button type="submit" class="px-4 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-xs font-semibold text-white">
-            Save Category
-          </button>
         </form>
         <div id="category-rules-list" class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs"></div>
       </div>
@@ -1282,7 +1560,7 @@
           </button>
         </div>
         <p class="text-xs text-slate-400">
-          Learns from every category you edit (giving 3x weight to your manual overrides) to automatically suggest and tag future transactions.
+          Fallback classifier used only when no Pattern-Based Rule matches. Learns merchant, amount range, day-of-month, and monthly cadence (giving 3x weight to your manual edits).
         </p>
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
           <label class="flex items-center gap-2 bg-slate-950 border border-slate-800 rounded-xl p-3 cursor-pointer">
@@ -1402,10 +1680,172 @@
           </div>
         </div>
       </div>
+
+      <!-- Account Security & Sessions -->
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <h2 class="text-sm font-semibold text-white">Account Security &amp; Sessions</h2>
+            <p id="security-user-label" class="text-xs text-slate-400">Signed in</p>
+          </div>
+          <div class="flex flex-wrap items-center gap-2">
+            <button id="btn-sync-google-emails" type="button" onclick="syncGoogleEmailsNow()" class="hidden px-3 py-1.5 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/30 text-xs font-medium text-emerald-300 transition">Sync Google Emails</button>
+            <a id="btn-connect-google" href="/api/auth/google/start" class="hidden px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-medium text-slate-200 transition">Connect Google &amp; Gmail</a>
+            <button type="button" onclick="loadSecurityAuditLogs()" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-medium text-slate-200 transition">Refresh Audit Log</button>
+            <button id="btn-sign-out" type="button" onclick="signOut()" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-rose-500/15 border border-rose-500/25 text-xs font-medium text-[#FCA5A5] hover:text-white transition" title="Sign out of this session"><i data-lucide="log-out" class="w-3.5 h-3.5"></i><span>Sign out</span></button>
+            <button type="button" onclick="signOutAll()" class="px-3 py-1.5 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 text-xs font-medium text-rose-300 transition">Sign Out All Sessions</button>
+          </div>
+        </div>
+        <form onsubmit="changeAccountPassword(event)" class="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
+          <div>
+            <label for="sec-current-pw" class="block text-xs text-slate-400 mb-1">Current password</label>
+            <input id="sec-current-pw" type="password" autocomplete="current-password" required class="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-xs text-white" />
+          </div>
+          <div>
+            <label for="sec-new-pw" class="block text-xs text-slate-400 mb-1">New password (12+ chars)</label>
+            <input id="sec-new-pw" type="password" autocomplete="new-password" minlength="12" maxlength="128" required class="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-xs text-white" />
+          </div>
+          <div>
+            <button type="submit" class="w-full px-4 py-2 rounded-lg bg-sky-600 hover:bg-sky-500 text-xs font-semibold text-white transition">Update Password</button>
+          </div>
+        </form>
+        <div class="overflow-x-auto border border-slate-800 rounded-xl max-h-56 overflow-y-auto">
+          <table class="w-full text-left text-xs">
+            <thead class="bg-slate-950 text-slate-400 uppercase text-[10px]">
+              <tr>
+                <th class="p-2.5">Event</th>
+                <th class="p-2.5">IP</th>
+                <th class="p-2.5">Detail</th>
+                <th class="p-2.5">Time</th>
+              </tr>
+            </thead>
+            <tbody id="security-audit-tbody" class="divide-y divide-slate-800"></tbody>
+          </table>
+        </div>
+      </div>
     </section>
   </div>
 
   <script>
+    (() => {
+      const _origFetch = window.fetch.bind(window);
+      function _getCookie(name) {
+        const prefix = name + "=";
+        for (const part of document.cookie.split(";")) {
+          const trimmed = part.trim();
+          if (trimmed.startsWith(prefix)) {
+            return decodeURIComponent(trimmed.slice(prefix.length));
+          }
+        }
+        return "";
+      }
+      window.fetch = async (input, init = {}) => {
+        const url = typeof input === "string" ? input : (input && input.url ? input.url : "");
+        const method = String(init.method || "GET").toUpperCase();
+        const isSameOrigin = url.startsWith("/") || url.startsWith(window.location.origin);
+        const nextInit = { ...init };
+        if (isSameOrigin && !nextInit.credentials) {
+          nextInit.credentials = "same-origin";
+        }
+        if (isSameOrigin && !["GET", "HEAD", "OPTIONS"].includes(method)) {
+          const headers = new Headers(nextInit.headers || {});
+          const csrf = _getCookie("erp_csrf");
+          if (csrf && !headers.has("X-CSRF-Token")) {
+            headers.set("X-CSRF-Token", csrf);
+          }
+          nextInit.headers = headers;
+        }
+        const res = await _origFetch(input, nextInit);
+        if (res.status === 401 && !url.startsWith("/api/auth/")) {
+          window.location.replace("/login");
+        }
+        return res;
+      };
+    })();
+
+    async function signOut() {
+      try {
+        await fetch("/api/auth/logout", { method: "POST" });
+      } finally {
+        window.location.replace("/login");
+      }
+    }
+
+    async function signOutAll() {
+      if (!confirm("Sign out of all active sessions on every device?")) return;
+      try {
+        await fetch("/api/auth/logout-all", { method: "POST" });
+      } finally {
+        window.location.replace("/login");
+      }
+    }
+
+    async function changeAccountPassword(e) {
+      e.preventDefault();
+      const currentPassword = document.getElementById("sec-current-pw").value;
+      const newPassword = document.getElementById("sec-new-pw").value;
+      const res = await fetch("/api/auth/change-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        showToast(data.detail || "Failed to update password.", "error");
+        return;
+      }
+      document.getElementById("sec-current-pw").value = "";
+      document.getElementById("sec-new-pw").value = "";
+      showToast("Password updated and prior sessions revoked.", "ok");
+      loadSecurityAuditLogs();
+    }
+
+    async function syncGoogleEmailsNow() {
+      const res = await fetch("/api/auth/google/sync", { method: "POST" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        showToast(data.detail || "Failed to sync Google emails.", "error");
+        return;
+      }
+      showToast(data.status || "Google emails synced.", "ok");
+      await refreshAll();
+    }
+
+    async function loadSecurityAuditLogs() {
+      try {
+        const [statusRes, logsRes] = await Promise.all([fetch("/api/auth/status"), fetch("/api/auth/audit-logs")]);
+        if (statusRes.ok) {
+          const st = await statusRes.json();
+          const me = st.user;
+          const lbl = document.getElementById("security-user-label");
+          if (lbl && me) {
+            lbl.textContent = `Signed in as ${me.full_name} (${me.email})${st.google_connected ? " · Gmail Connected" : ""}`;
+          }
+          const syncBtn = document.getElementById("btn-sync-google-emails");
+          const connBtn = document.getElementById("btn-connect-google");
+          if (syncBtn) syncBtn.classList.toggle("hidden", !st.google_connected);
+          if (connBtn) connBtn.classList.toggle("hidden", st.google_connected || !st.google_oauth_enabled);
+        }
+        if (logsRes.ok) {
+          const logs = await logsRes.json();
+          const tbody = document.getElementById("security-audit-tbody");
+          if (tbody) {
+            tbody.textContent = "";
+            for (const row of logs) {
+              const tr = document.createElement("tr");
+              for (const val of [row.event_type, row.ip_address, row.detail, new Date(row.created_at).toLocaleString()]) {
+                const td = document.createElement("td");
+                td.className = "p-2.5 text-slate-300";
+                td.textContent = val || "";
+                tr.appendChild(td);
+              }
+              tbody.appendChild(tr);
+            }
+          }
+        }
+      } catch (_) {}
+    }
+
     let _backdropDownTarget = null;
     document.addEventListener("mousedown", (e) => {
       _backdropDownTarget = e.target;
@@ -1426,6 +1866,7 @@
     let categoryChart = null;
     let monthlyCatChart = null;
     let monthFilterInitialized = false;
+    const excludedCategories = new Set();
 
     const todayIso = new Date().toISOString().slice(0, 10);
     document.getElementById("end-date").value = todayIso;
@@ -1554,7 +1995,7 @@
         ok: "bg-emerald-950 border-emerald-500/60 text-emerald-200",
         err: "bg-rose-950 border-rose-500/60 text-rose-200",
       };
-      el.className = `fixed bottom-5 right-5 z-50 max-w-sm px-4 py-3 rounded-xl shadow-2xl border text-xs font-medium ${styles[kind] || styles.info}`;
+      el.className = `fixed bottom-20 sm:bottom-5 left-4 right-4 sm:left-auto sm:right-5 z-50 sm:max-w-sm px-4 py-3 rounded-xl shadow-2xl border text-xs font-medium ${styles[kind] || styles.info}`;
       el.textContent = msg;
       showOverlay(el);
       clearTimeout(el._timer);
@@ -1634,6 +2075,82 @@
 
     document.addEventListener("click", () => closeAllActionMenus());
 
+    // Mobile Touch Gestures:
+    // 1. Swipe left/right on floating bottom dock to switch months
+    // 2. Swipe down on bottom-sheet modal handles to dismiss
+    // 3. Swipe left/right on main body (outside horizontal scrollers) to switch workspace tabs
+    (() => {
+      const TAB_ORDER = ["wealth", "assets", "kitchen", "trainer", "friction", "resolve", "settings"];
+
+      const dock = document.getElementById("wealth-bottom-dock");
+      if (dock) {
+        let dx0 = null, dy0 = null;
+        dock.addEventListener("touchstart", (e) => {
+          if (e.touches.length !== 1) return;
+          dx0 = e.touches[0].clientX;
+          dy0 = e.touches[0].clientY;
+        }, { passive: true });
+        dock.addEventListener("touchend", (e) => {
+          if (dx0 === null || !e.changedTouches.length) return;
+          const dx = e.changedTouches[0].clientX - dx0;
+          const dy = e.changedTouches[0].clientY - dy0;
+          dx0 = dy0 = null;
+          if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy) * 1.4) {
+            stepMonthFilter(dx < 0 ? 1 : -1);
+          }
+        }, { passive: true });
+      }
+
+      const sheetConfigs = [
+        ["day-tx-modal", closeDayTransactionsModal],
+        ["account-tx-modal", closeAccountTransactionsModal],
+      ];
+      for (const [modalId, closeFn] of sheetConfigs) {
+        const modalEl = document.getElementById(modalId);
+        if (!modalEl) continue;
+        let sy = null, sx = null;
+        modalEl.addEventListener("touchstart", (e) => {
+          if (e.touches.length !== 1 || !e.target.closest("[data-sheet-handle]")) return;
+          sx = e.touches[0].clientX;
+          sy = e.touches[0].clientY;
+        }, { passive: true });
+        modalEl.addEventListener("touchend", (e) => {
+          if (sy === null || !e.changedTouches.length) return;
+          const dy = e.changedTouches[0].clientY - sy;
+          const dx = e.changedTouches[0].clientX - sx;
+          sy = sx = null;
+          if (dy > 65 && dy > Math.abs(dx) * 1.4) closeFn();
+        }, { passive: true });
+      }
+
+      let bx0 = null, by0 = null, bIgnore = false;
+      document.addEventListener("touchstart", (e) => {
+        if (e.touches.length !== 1) return;
+        bIgnore = !!e.target.closest(".no-scrollbar, .snap-x, .overflow-x-auto, canvas, input, select, textarea, #wealth-bottom-dock, [id$='-modal-backdrop']");
+        bx0 = e.touches[0].clientX;
+        by0 = e.touches[0].clientY;
+      }, { passive: true });
+      document.addEventListener("touchend", (e) => {
+        if (bIgnore || bx0 === null || !e.changedTouches.length) return;
+        const dx = e.changedTouches[0].clientX - bx0;
+        const dy = e.changedTouches[0].clientY - by0;
+        bx0 = by0 = null;
+        if (Math.abs(dx) > 90 && Math.abs(dx) > Math.abs(dy) * 2.0) {
+          const activeIdx = TAB_ORDER.findIndex((t) => {
+            const p = document.getElementById(`panel-${t}`);
+            return p && !p.classList.contains("hidden");
+          });
+          if (activeIdx === -1) return;
+          const nextIdx = activeIdx + (dx < 0 ? 1 : -1);
+          if (nextIdx >= 0 && nextIdx < TAB_ORDER.length) {
+            switchTab(TAB_ORDER[nextIdx]);
+            const activeTabBtn = document.getElementById(`tab-${TAB_ORDER[nextIdx]}`);
+            if (activeTabBtn) activeTabBtn.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+          }
+        }
+      }, { passive: true });
+    })();
+
     function _renderRowActionsHtml(r, scopePrefix) {
       const menuId = `row-menu-${scopePrefix}-${r.id}`;
       const isExpLinkable = r.tx_type === "expense" && !r.is_self_transfer;
@@ -1689,8 +2206,8 @@
           if (isTarget) btn.setAttribute("aria-current", "page");
           else btn.removeAttribute("aria-current");
           btn.className = isTarget
-            ? `${t === "settings" ? "ml-auto " : ""}inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-[#1E1F25] text-[#F7F8F8] border border-white/[0.12] transition`
-            : `${t === "settings" ? "ml-auto " : ""}inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-[#9CA3AF] hover:text-[#F7F8F8] hover:bg-white/[0.04] border border-transparent transition`;
+            ? `${t === "settings" ? "sm:ml-auto " : ""}shrink-0 whitespace-nowrap inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-[#1E1F25] text-[#F7F8F8] border border-white/[0.12] transition`
+            : `${t === "settings" ? "sm:ml-auto " : ""}shrink-0 whitespace-nowrap inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-[#9CA3AF] hover:text-[#F7F8F8] hover:bg-white/[0.04] border border-transparent transition`;
           const icon = btn.querySelector("svg, i, iconify-icon");
           if (icon) {
             icon.classList.toggle("text-[#818CF8]", isTarget);
@@ -1730,6 +2247,11 @@
       document.getElementById("set-cals").value = s.default_calories;
       document.getElementById("set-prot").value = s.default_protein_g;
       document.getElementById("set-holder-names").value = s.account_holder_names || "";
+      const tngPwInput = document.getElementById("set-tng-pdf-password");
+      tngPwInput.value = "";
+      tngPwInput.placeholder = s.has_tng_pdf_password
+        ? "Saved (enter new password to replace)"
+        : "e.g. 1123456789 (mobile without +60)";
       const lastAt = s.last_auto_sync_at ? new Date(s.last_auto_sync_at).toLocaleString() : "Never";
       document.getElementById("auto-sync-status-line").textContent =
         `Last Auto-Sync: ${lastAt} · ${s.last_auto_sync_status}`;
@@ -1755,22 +2277,40 @@
 
       const metaEl = document.getElementById("cat-model-modal-meta");
       if (metaEl) {
-        const at = m.trained_at ? new Date(m.trained_at).toLocaleString() : "Never";
+        const rawAt = m.trained_at ? (/[zZ]|[+-]\d{2}:?\d{2}$/.test(m.trained_at) ? m.trained_at : `${m.trained_at}Z`) : null;
+        const at = rawAt ? new Date(rawAt).toLocaleString() : "Never";
         metaEl.textContent = m.trained
-          ? `${m.sample_count} samples (${m.manual_sample_count} manual) · ${m.categories_count} categories · Last trained: ${at}`
+          ? `${m.sample_count} samples (${m.manual_sample_count} manual · 3x weight) · ${m.categories_count} categories · ${m.vocab_size || 0} features · Last trained: ${at}`
           : "Click Retrain Now to learn from your categorized transactions.";
       }
 
       const kwGrid = document.getElementById("cat-model-keywords-grid");
       if (kwGrid) {
-        const entries = Object.entries(m.top_keywords || {});
+        const patterns = m.top_patterns || {};
+        const entries = Object.keys(patterns).length
+          ? Object.entries(patterns)
+          : Object.entries(m.top_keywords || {}).map(([cat, kws]) => [cat, { keywords: kws }]);
         kwGrid.innerHTML = entries.length
-          ? entries.map(([cat, kws]) => `
-            <div class="bg-slate-950 border border-slate-800 rounded-xl p-2.5">
-              <div class="font-semibold text-white">${cat}</div>
-              <div class="text-[11px] text-indigo-300 mt-0.5">${(kws || []).join(", ") || "—"}</div>
-            </div>`).join("")
-          : `<div class="text-slate-500 col-span-full">No learned patterns yet.</div>`;
+          ? entries.map(([cat, info]) => {
+            const kws = (info.keywords || []).join(", ") || "—";
+            const badges = [...(info.amounts || []), ...(info.timing || [])]
+              .map((b) => `<span class="px-1.5 py-0.5 rounded bg-indigo-500/15 border border-indigo-500/30 text-indigo-300 text-[10px]">${b}</span>`)
+              .join("");
+            const wt = info.weight != null ? `<span class="text-[10px] text-slate-500">w=${info.weight}</span>` : "";
+            return `
+            <div class="bg-slate-950 border border-slate-800 rounded-xl p-2.5 space-y-1">
+              <div class="flex items-center justify-between gap-2">
+                <div class="flex items-center gap-1.5 min-w-0">
+                  <span class="inline-block w-2 h-2 rounded-full shrink-0" style="background-color: ${getCategoryColor(cat)}"></span>
+                  <span class="font-semibold text-white truncate">${cat}</span>
+                </div>
+                ${wt}
+              </div>
+              <div class="text-[11px] text-sky-300 break-words">${kws}</div>
+              ${badges ? `<div class="flex flex-wrap gap-1 pt-0.5">${badges}</div>` : ""}
+            </div>`;
+          }).join("")
+          : `<div class="text-slate-500 col-span-full">No learned patterns yet. Click Retrain Now to build amount &amp; cadence features.</div>`;
       }
 
       const sugCount = document.getElementById("cat-model-sug-count");
@@ -1786,11 +2326,12 @@
             <div class="bg-[#0B0C0E] border border-white/[0.07] rounded-xl px-3 py-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
               <div class="min-w-0">
                 <div class="font-medium text-[#F7F8F8] truncate">${s.merchant}</div>
-                <div class="text-[11px] text-[#9CA3AF]">${s.occurred_at.slice(0, 10)} · ${s.account_name} · <span class="font-mono-num">${fmtMYR(s.amount_myr)}</span></div>
+                <div class="text-[11px] text-[#9CA3AF]">${s.occurred_at.slice(0, 10)} · ${s.account_name} · <span class="font-mono-num">${fmtMYR(s.amount_myr)}</span>${s.monthly_count ? ` · ${s.monthly_count}x/mo` : ""}</div>
                 <div class="text-[11px] text-[#9CA3AF] mt-0.5">
                   AI: ${s.current_category} &rarr; <span class="text-[#34D399] font-medium">${s.suggested_category}</span>
                   <span class="text-[#818CF8] ml-1">(${Math.round(s.confidence * 100)}%)</span>
                 </div>
+                ${(s.reasons && s.reasons.length) ? `<div class="text-[10px] text-slate-400 mt-0.5">Why: ${s.reasons.join(" · ")}</div>` : ""}
               </div>
               <div class="flex items-center gap-1.5 shrink-0">
                 <select id="cat-sug-fix-${entryId}" class="bg-[#111216] border border-white/[0.1] rounded-lg px-2 py-1 text-[11px] text-[#F7F8F8] max-w-[140px]">
@@ -1905,6 +2446,30 @@
     let categoryNamesCache = ["Business Claim", "Food & Beverage", "Groceries & Mart", "Shopping & Retail", "Subscriptions & Digital", "Transport", "Fuel & Toll", "Parking & E-Wallet", "P2P Transfers", "Bank / Retail", "General"];
     let categoryRulesCache = [];
     let pendingEditCategoryRule = null;
+    const CATEGORY_PALETTE = [
+      "#F97316", "#84CC16", "#EC4899", "#8B5CF6", "#06B6D4",
+      "#64748B", "#EF4444", "#3B82F6", "#14B8A6", "#F59E0B",
+      "#10B981", "#38BDF8", "#F43F5E", "#22C55E", "#EAB308",
+      "#A855F7", "#6366F1", "#D946EF", "#FB923C", "#2DD4BF"
+    ];
+
+    function getCategoryColor(catName) {
+      const rule = categoryRulesCache.find((r) => r.name === catName);
+      if (rule && /^#[0-9a-fA-F]{6}$/.test(rule.color || "")) return rule.color.toUpperCase();
+      const used = new Set(categoryRulesCache.map((r) => (r.color || "").toUpperCase()).filter(Boolean));
+      const idx = categoryRulesCache.findIndex((r) => r.name === catName);
+      if (idx >= 0) {
+        const free = CATEGORY_PALETTE.filter((c) => !used.has(c));
+        if (free.length) return free[idx % free.length];
+      }
+      let h = 2166136261;
+      const s = String(catName || "General");
+      for (let i = 0; i < s.length; i++) {
+        h ^= s.charCodeAt(i);
+        h = Math.imul(h, 16777619);
+      }
+      return CATEGORY_PALETTE[(h >>> 0) % CATEGORY_PALETTE.length];
+    }
 
     async function loadCategoryRules() {
       const res = await fetch("/api/wealth/categories");
@@ -1923,15 +2488,33 @@
         if (ft === "expense") return `<span class="px-1.5 py-0.5 rounded bg-rose-500/20 border border-rose-500/40 text-rose-300 text-[10px] font-semibold">Expense</span>`;
         return `<span class="px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700 text-slate-400 text-[10px]">Auto</span>`;
       };
+      const patternBadges = (r) => {
+        const parts = [];
+        if (r.day_min != null || r.day_max != null) {
+          parts.push(`Day ${r.day_min ?? 1}${r.day_max != null && r.day_max !== r.day_min ? `–${r.day_max}` : ""}`);
+        }
+        if (r.amount_min != null || r.amount_max != null) {
+          const lo = r.amount_min != null ? `RM ${r.amount_min}` : "RM 0";
+          const hi = r.amount_max != null ? (r.amount_max === r.amount_min ? "" : `–${r.amount_max}`) : "+";
+          parts.push(`${lo}${hi}`);
+        }
+        if (r.tx_direction && r.tx_direction !== "any") {
+          parts.push(r.tx_direction === "income" ? "Money In" : "Money Out");
+        }
+        if (r.account_filter) parts.push(r.account_filter);
+        return parts.map((p) => `<span class="px-1.5 py-0.5 rounded bg-indigo-500/15 border border-indigo-500/30 text-indigo-300 text-[10px]">${p}</span>`).join("");
+      };
       el.innerHTML = rules.length
         ? rules.map((r) => `
           <div class="bg-slate-950 border border-slate-800 rounded-xl p-3 flex items-start justify-between gap-2">
             <div class="min-w-0">
               <div class="flex items-center gap-1.5 flex-wrap">
+                <span class="inline-block w-2.5 h-2.5 rounded-full shrink-0" style="background-color: ${getCategoryColor(r.name)}"></span>
                 <span class="font-semibold text-white">${r.name}</span>
                 ${flowBadge(r.flow_type || "auto")}
+                ${patternBadges(r)}
               </div>
-              <div class="text-[11px] text-slate-400 mt-0.5 break-words">${r.keywords || "Manual only (no keywords)"}</div>
+              <div class="text-[11px] text-slate-400 mt-0.5 break-words">${r.keywords || (patternBadges(r) ? "Pattern-matched (no keywords required)" : "Manual only")}</div>
             </div>
             <div class="flex items-center gap-1.5 shrink-0">
               <button type="button" onclick="openEditCategoryModal(${r.id})" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-sky-300 text-[11px]">Edit</button>
@@ -1948,6 +2531,13 @@
       document.getElementById("edit-cat-name").value = rule.name;
       document.getElementById("edit-cat-flow-type").value = rule.flow_type || "auto";
       document.getElementById("edit-cat-budget").value = rule.monthly_budget_myr != null ? rule.monthly_budget_myr : "";
+      document.getElementById("edit-cat-color").value = getCategoryColor(rule.name);
+      document.getElementById("edit-cat-day-min").value = rule.day_min != null ? rule.day_min : "";
+      document.getElementById("edit-cat-day-max").value = rule.day_max != null ? rule.day_max : "";
+      document.getElementById("edit-cat-amt-min").value = rule.amount_min != null ? rule.amount_min : "";
+      document.getElementById("edit-cat-amt-max").value = rule.amount_max != null ? rule.amount_max : "";
+      document.getElementById("edit-cat-direction").value = rule.tx_direction || "any";
+      document.getElementById("edit-cat-account").value = rule.account_filter || "";
       document.getElementById("edit-cat-keywords").value = rule.keywords || "";
       showOverlay(document.getElementById("edit-category-modal-backdrop"));
       setTimeout(() => {
@@ -1969,6 +2559,15 @@
       const newFlowType = document.getElementById("edit-cat-flow-type").value || "auto";
       const rawBudget = document.getElementById("edit-cat-budget").value.trim();
       const newBudget = rawBudget ? parseFloat(rawBudget) : null;
+      const newColor = document.getElementById("edit-cat-color")?.value || "";
+      const _intOrNull = (id) => {
+        const v = document.getElementById(id)?.value.trim();
+        return v ? parseInt(v, 10) : null;
+      };
+      const _floatOrNull = (id) => {
+        const v = document.getElementById(id)?.value.trim();
+        return v ? parseFloat(v) : null;
+      };
       const newKeywords = document.getElementById("edit-cat-keywords").value.trim();
       if (!newName) return;
 
@@ -1978,7 +2577,19 @@
       await fetch("/api/wealth/categories", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: newName, keywords: newKeywords, flow_type: newFlowType, monthly_budget_myr: newBudget }),
+        body: JSON.stringify({
+          name: newName,
+          keywords: newKeywords,
+          flow_type: newFlowType,
+          monthly_budget_myr: newBudget,
+          color: newColor,
+          day_min: _intOrNull("edit-cat-day-min"),
+          day_max: _intOrNull("edit-cat-day-max"),
+          amount_min: _floatOrNull("edit-cat-amt-min"),
+          amount_max: _floatOrNull("edit-cat-amt-max"),
+          tx_direction: document.getElementById("edit-cat-direction")?.value || "any",
+          account_filter: document.getElementById("edit-cat-account")?.value.trim() || "",
+        }),
       });
       closeEditCategoryModal();
       showToast(`Updated category "${newName}" & re-tagged ledger!`, "ok");
@@ -1988,11 +2599,26 @@
     async function saveCategoryRule(e) {
       e.preventDefault();
       const rawBudget = document.getElementById("cat-budget")?.value.trim() || "";
+      const _intOrNull = (id) => {
+        const v = document.getElementById(id)?.value.trim();
+        return v ? parseInt(v, 10) : null;
+      };
+      const _floatOrNull = (id) => {
+        const v = document.getElementById(id)?.value.trim();
+        return v ? parseFloat(v) : null;
+      };
       const payload = {
         name: document.getElementById("cat-name").value.trim(),
         keywords: document.getElementById("cat-keywords").value.trim(),
         flow_type: document.getElementById("cat-flow-type").value || "auto",
         monthly_budget_myr: rawBudget ? parseFloat(rawBudget) : null,
+        color: document.getElementById("cat-color")?.value || "",
+        day_min: _intOrNull("cat-day-min"),
+        day_max: _intOrNull("cat-day-max"),
+        amount_min: _floatOrNull("cat-amt-min"),
+        amount_max: _floatOrNull("cat-amt-max"),
+        tx_direction: document.getElementById("cat-direction")?.value || "any",
+        account_filter: document.getElementById("cat-account")?.value.trim() || "",
       };
       await fetch("/api/wealth/categories", {
         method: "PUT",
@@ -2117,6 +2743,8 @@
         default_protein_g: parseInt(document.getElementById("set-prot").value, 10),
         account_holder_names: document.getElementById("set-holder-names").value.trim(),
       };
+      const tngPwVal = document.getElementById("set-tng-pdf-password").value.trim();
+      if (tngPwVal) payload.tng_pdf_password = tngPwVal;
       await fetch("/api/settings", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -2342,7 +2970,7 @@
       }
     }
 
-    function openAddTransactionModal(defaultRecurrence = "one_off", defaultType = "expense") {
+    function openAddTransactionModal(defaultRecurrence = "one_off", defaultType = "expense", defaultDate = null) {
       const form = document.getElementById("add-transaction-form");
       if (form) form.reset();
       const typeEl = document.getElementById("m-type");
@@ -2350,12 +2978,16 @@
       const catEl = document.getElementById("m-category");
       if (catEl) catEl.value = "General";
       const dateEl = document.getElementById("m-date");
-      if (dateEl) dateEl.value = new Date().toISOString().slice(0, 16);
+      if (dateEl) dateEl.value = defaultDate ? `${defaultDate}T12:00` : new Date().toISOString().slice(0, 16);
       const recEl = document.getElementById("m-recurrence");
       if (recEl) recEl.value = defaultRecurrence;
       toggleManualRecurrenceInterval();
       showOverlay(document.getElementById("add-transaction-modal-backdrop"));
       setTimeout(() => document.getElementById("m-merchant")?.focus(), 40);
+    }
+
+    function openAddTransactionFromDayModal() {
+      openAddTransactionModal("one_off", "expense", activeModalDate);
     }
 
     function closeAddTransactionModal() {
@@ -2381,11 +3013,15 @@
         recurrence_mode,
         interval_days,
       };
-      await fetch("/api/wealth/entries/manual", {
+      const res = await fetch("/api/wealth/entries/manual", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
+      if (!res.ok) {
+        showToast("Failed to save transaction.", "err");
+        return;
+      }
       e.target.reset();
       document.getElementById("m-category").value = "General";
       document.getElementById("m-date").value = new Date().toISOString().slice(0, 16);
@@ -2393,9 +3029,11 @@
       showToast(recurrence_mode === "one_off" ? "Added manual entry." : `Added entry & saved ${recurrence_mode.replace("_", " ")} recurring bill!`, "ok");
       closeAddTransactionModal();
       await refreshAll();
+      _refreshActiveEntryModal();
     }
 
     async function loadWealthData() {
+      if (!categoryRulesCache.length) await loadCategoryRules();
       // First fetch overall monthly list to populate the Month selector
       const allSumRes = await fetch("/api/wealth/summary");
       const allSum = await allSumRes.json();
@@ -2493,7 +3131,7 @@
             const totFlow = (a.total_in_myr || 0) + (a.total_out_myr || 0);
             const inPct = totFlow > 0 ? Math.round(((a.total_in_myr || 0) / totFlow) * 100) : 50;
             return `
-            <div onclick="openAccountTransactionsModal('${a.name.replace(/'/g, "\\'")}')" style="--stagger-i: ${idx}" class="glow-card stagger-in bg-[#0B0C0E] hover:bg-[#16171C] border border-white/[0.07] hover:border-[#5E6AD2]/50 rounded-xl p-3 cursor-pointer transition">
+            <div onclick="openAccountTransactionsModal('${a.name.replace(/'/g, "\\'")}')" style="--stagger-i: ${idx}" class="flex-[0_0_76%] snap-start sm:flex-auto glow-card stagger-in bg-[#0B0C0E] hover:bg-[#16171C] border border-white/[0.07] hover:border-[#5E6AD2]/50 rounded-xl p-3 cursor-pointer transition">
               <div class="flex items-center justify-between text-xs gap-2">
                 <span class="font-medium text-[#F7F8F8] truncate">${a.name}</span>
                 <div class="flex items-center gap-1.5 shrink-0">
@@ -2558,14 +3196,30 @@
       renderList("top-transfers-in-list", sum.top_transfers_in || [], "in");
     }
 
-    function openTransferPersonModal(name, entryIds, direction) {
+    function openTransferPersonModal(name, entryIds, direction, preserveSort = false) {
+      activeModalDate = null;
+      activeModalCategory = null;
+      activeModalKpi = null;
+      activeModalTransfer = { name, entryIds, direction };
+      if (!preserveSort) {
+        dayModalSortCol = null;
+        dayModalSortDir = "desc";
+      }
       const idSet = new Set(entryIds || []);
       const entries = allEntriesCache.filter((r) => idSet.has(r.id));
       const label = direction === "out" ? `Transfers Sent To "${name}"` : `Transfers Received From "${name}"`;
       _renderEntryModal(label, entries, `No transfers found for ${name}.`, true);
     }
 
-    function openKpiTransactionsModal(kind) {
+    function openKpiTransactionsModal(kind, preserveSort = false) {
+      activeModalDate = null;
+      activeModalCategory = null;
+      activeModalTransfer = null;
+      activeModalKpi = kind;
+      if (!preserveSort) {
+        dayModalSortCol = kind === "burn" ? "amount" : null;
+        dayModalSortDir = "desc";
+      }
       const activeMonth = document.getElementById("month-filter")?.value || "All Months";
       if (kind === "income") {
         const entries = allEntriesCache.filter((r) => !r.is_self_transfer && r.tx_type === "income");
@@ -2574,9 +3228,7 @@
         const entries = allEntriesCache.filter((r) => !r.is_self_transfer && r.tx_type === "repayment");
         _renderEntryModal(`Repayment Transactions (${activeMonth})`, entries, "No repayment transactions in this period.");
       } else if (kind === "burn") {
-        const entries = allEntriesCache
-          .filter((r) => !r.is_self_transfer && r.tx_type === "expense")
-          .sort((a, b) => (b.net_amount_myr ?? b.amount_myr) - (a.net_amount_myr ?? a.amount_myr));
+        const entries = allEntriesCache.filter((r) => !r.is_self_transfer && r.tx_type === "expense");
         _renderEntryModal(`Daily Burn Breakdown (${activeMonth})`, entries, "No expense transactions in this period.");
       } else {
         const entries = allEntriesCache.filter((r) => !r.is_self_transfer && r.tx_type === "expense");
@@ -2801,6 +3453,7 @@
       const typeFiltered = searchMatched.filter((r) => {
         if (f === "claimable") return !!r.is_claimable;
         if (f === "self_transfer") return !!r.is_self_transfer;
+        if (hideSelfTransfers && r.is_self_transfer) return false;
         if (f !== "all") return !r.is_self_transfer && r.tx_type === f;
         return true;
       });
@@ -2880,45 +3533,151 @@
 
     let activeModalDate = null;
     let activeModalCategory = null;
+    let activeModalKpi = null;
+    let activeModalTransfer = null;
+    let activeDayModalEntries = [];
+    let activeDayModalEmptyMsg = "";
+    let activeDayModalShowDate = false;
+    let dayModalSortCol = null;
+    let dayModalSortDir = "desc";
 
-    function _renderEntryModal(title, entries, emptyMsg, showDateUnderMerchant = false) {
-      const dayIncome = entries.filter((r) => !r.is_self_transfer && r.tx_type === "income").reduce((acc, r) => acc + r.amount_myr, 0);
-      const dayExpense = entries.filter((r) => !r.is_self_transfer && r.tx_type === "expense").reduce((acc, r) => acc + (r.net_amount_myr !== null && r.net_amount_myr !== undefined ? r.net_amount_myr : r.amount_myr), 0);
+    const DAY_MODAL_SORT_COLS = ["merchant", "category", "account", "amount"];
+    const ACCT_MODAL_SORT_COLS = ["merchant", "category", "date", "amount"];
+    const EMAIL_MODAL_SORT_COLS = ["date", "subject", "merchant", "amount"];
 
-      document.getElementById("day-modal-title").textContent = title;
-      document.getElementById("day-modal-summary").innerHTML = `
-        <span class="text-emerald-400 font-semibold">Income: +${fmtMYR(dayIncome)}</span>
-        <span class="text-rose-400 font-semibold">Expense: -${fmtMYR(dayExpense)}</span>
-        <span class="text-slate-400">${entries.length} transaction${entries.length === 1 ? "" : "s"}</span>
-      `;
-      document.getElementById("day-modal-tbody").innerHTML = entries.length
-        ? entries.map((r) => `
+    function _nextModalSortState(curCol, curDir, clickedCol) {
+      if (curCol === clickedCol) {
+        return [clickedCol, curDir === "asc" ? "desc" : "asc"];
+      }
+      return [clickedCol, clickedCol === "date" || clickedCol === "amount" ? "desc" : "asc"];
+    }
+
+    function _updateModalSortIndicators(prefix, cols, sortCol, sortDir) {
+      for (const c of cols) {
+        const el = document.getElementById(`${prefix}-${c}`);
+        if (!el) continue;
+        if (c === sortCol) {
+          el.textContent = sortDir === "asc" ? "▲" : "▼";
+          el.className = "text-[10px] text-sky-400";
+        } else {
+          el.textContent = "↕";
+          el.className = "text-[10px] text-slate-600";
+        }
+      }
+    }
+
+    function _compareModalEntries(a, b, col, dir, allExpenseMode = false) {
+      if (col === "date") return (a.occurred_at || "").localeCompare(b.occurred_at || "") * dir;
+      if (col === "merchant") return (a.display_merchant || a.merchant || "").localeCompare(b.display_merchant || b.merchant || "") * dir;
+      if (col === "subject") return (a.subject || a.merchant || "").localeCompare(b.subject || b.merchant || "") * dir;
+      if (col === "details") return (a.merchant || "").localeCompare(b.merchant || "") * dir;
+      if (col === "category") return (a.category || "").localeCompare(b.category || "") * dir;
+      if (col === "account") return (a.account_name || "").localeCompare(b.account_name || "") * dir;
+      if (col === "amount") {
+        const effA = a.net_amount_myr ?? a.amount_myr;
+        const effB = b.net_amount_myr ?? b.amount_myr;
+        const va = allExpenseMode ? effA : (a.tx_type === "expense" ? -effA : a.amount_myr);
+        const vb = allExpenseMode ? effB : (b.tx_type === "expense" ? -effB : b.amount_myr);
+        return (va - vb) * dir;
+      }
+      return 0;
+    }
+
+    function _sortModalEntryRows(rows, sortCol, sortDir) {
+      if (!sortCol) return;
+      const dir = sortDir === "asc" ? 1 : -1;
+      const nonSelf = rows.filter((r) => !r.is_self_transfer);
+      const allExpenseMode = nonSelf.length > 0 && nonSelf.every((r) => r.tx_type === "expense");
+      rows.sort((a, b) => _compareModalEntries(a, b, sortCol, dir, allExpenseMode));
+    }
+
+    function toggleDayModalSort(col) {
+      [dayModalSortCol, dayModalSortDir] = _nextModalSortState(dayModalSortCol, dayModalSortDir, col);
+      _renderDayModalRows();
+    }
+
+    let hideSelfTransfers = false;
+
+    function toggleHideSelfTransfers(checked) {
+      hideSelfTransfers = Boolean(checked);
+      for (const id of ["day-modal-hide-self-cb", "acct-modal-hide-self-cb", "main-hide-self-cb"]) {
+        const el = document.getElementById(id);
+        if (el) el.checked = hideSelfTransfers;
+      }
+      renderEntriesTable();
+      const dayBackdrop = document.getElementById("day-tx-modal-backdrop");
+      if (dayBackdrop && !dayBackdrop.classList.contains("hidden")) _renderDayModalRows();
+      if (activeModalAccount) renderAccountModalRows();
+    }
+
+    function _renderDayModalRows() {
+      _updateModalSortIndicators("day-sort-ind", DAY_MODAL_SORT_COLS, dayModalSortCol, dayModalSortDir);
+      const selfCount = activeDayModalEntries.filter((r) => r.is_self_transfer).length;
+      const selfCountEl = document.getElementById("day-modal-self-count");
+      if (selfCountEl) selfCountEl.textContent = selfCount > 0 ? `(${selfCount})` : "";
+      const baseRows = hideSelfTransfers ? activeDayModalEntries.filter((r) => !r.is_self_transfer) : activeDayModalEntries;
+      const rows = [...baseRows];
+      const dayIncome = activeDayModalEntries.filter((r) => !r.is_self_transfer && r.tx_type === "income").reduce((acc, r) => acc + r.amount_myr, 0);
+      const dayExpense = activeDayModalEntries.filter((r) => !r.is_self_transfer && r.tx_type === "expense").reduce((acc, r) => acc + (r.net_amount_myr !== null && r.net_amount_myr !== undefined ? r.net_amount_myr : r.amount_myr), 0);
+      const sumEl = document.getElementById("day-modal-summary");
+      if (sumEl) {
+        sumEl.innerHTML = `
+          <span class="text-emerald-400 font-semibold">Income: +${fmtMYR(dayIncome)}</span>
+          <span class="text-rose-400 font-semibold">Expense: -${fmtMYR(dayExpense)}</span>
+          <span class="text-slate-400">${rows.length} transaction${rows.length === 1 ? "" : "s"}${hideSelfTransfers && selfCount > 0 ? ` (${selfCount} self hidden)` : ""}</span>
+        `;
+      }
+      _sortModalEntryRows(rows, dayModalSortCol, dayModalSortDir);
+      document.getElementById("day-modal-tbody").innerHTML = rows.length
+        ? rows.map((r) => `
           <tr class="hover:bg-slate-800/40">
             <td class="py-2.5 pr-2 font-medium text-[#F7F8F8] truncate" title="${r.subject || ""}">
               ${_merchantTitleHtml(r)}
-              ${(showDateUnderMerchant || r.subject) ? `<div class="text-[11px] text-slate-500 truncate">${showDateUnderMerchant ? r.occurred_at.slice(0, 10) + (r.subject ? " · " : "") : ""}${r.subject || ""}</div>` : ""}
+              ${(activeDayModalShowDate || r.subject) ? `<div class="text-[11px] text-slate-500 truncate">${activeDayModalShowDate ? r.occurred_at.slice(0, 10) + (r.subject ? " · " : "") : ""}${r.subject || ""}</div>` : ""}
             </td>
             <td class="py-2.5 pr-2">${_categorySelectHtml(r)}</td>
             <td class="py-2.5 pr-2 text-slate-400 truncate" title="${r.account_name} · ${r.sender_email}"><span class="text-[#9CA3AF]">${r.account_name}</span></td>
             <td class="py-2.5 pr-2 text-right font-mono-num font-semibold whitespace-nowrap">${_entryAmountBadge(r)}</td>
             <td class="py-2.5 text-right whitespace-nowrap">${_renderRowActionsHtml(r, "day")}</td>
           </tr>`).join("")
-        : `<tr><td colspan="5" class="py-6 text-center text-slate-500">${emptyMsg}</td></tr>`;
-
-      showOverlay(document.getElementById("day-tx-modal-backdrop"));
+        : `<tr><td colspan="5" class="py-6 text-center text-slate-500">${activeDayModalEmptyMsg}</td></tr>`;
       refreshIcons();
     }
 
-    function openDayTransactionsModal(dateStr) {
+    function _renderEntryModal(title, entries, emptyMsg, showDateUnderMerchant = false) {
+      document.getElementById("day-modal-title").textContent = title;
+      const dayAddBtn = document.getElementById("day-modal-add-btn");
+      if (dayAddBtn) dayAddBtn.classList.toggle("hidden", !activeModalDate);
+      activeDayModalEntries = [...entries];
+      activeDayModalEmptyMsg = emptyMsg;
+      activeDayModalShowDate = showDateUnderMerchant;
+      _renderDayModalRows();
+
+      showOverlay(document.getElementById("day-tx-modal-backdrop"));
+    }
+
+    function openDayTransactionsModal(dateStr, preserveSort = false) {
       activeModalDate = dateStr;
       activeModalCategory = null;
+      activeModalKpi = null;
+      activeModalTransfer = null;
+      if (!preserveSort) {
+        dayModalSortCol = null;
+        dayModalSortDir = "desc";
+      }
       const dayEntries = allEntriesCache.filter((r) => r.occurred_at.slice(0, 10) === dateStr);
       _renderEntryModal(`Transactions on ${dateStr}`, dayEntries, `No transactions recorded on ${dateStr}.`, false);
     }
 
-    function openCategoryTransactionsModal(categoryName) {
+    function openCategoryTransactionsModal(categoryName, preserveSort = false) {
       activeModalCategory = categoryName;
       activeModalDate = null;
+      activeModalKpi = null;
+      activeModalTransfer = null;
+      if (!preserveSort) {
+        dayModalSortCol = null;
+        dayModalSortDir = "desc";
+      }
       const catEntries = allEntriesCache.filter(
         (r) => r.category === categoryName && !r.is_self_transfer && r.tx_type === "expense"
       );
@@ -2927,9 +3686,20 @@
 
     let activeModalAccount = null;
     let activeAccountEntries = [];
+    let acctModalSortCol = "date";
+    let acctModalSortDir = "desc";
 
-    async function openAccountTransactionsModal(accountName) {
+    function toggleAcctModalSort(col) {
+      [acctModalSortCol, acctModalSortDir] = _nextModalSortState(acctModalSortCol, acctModalSortDir, col);
+      renderAccountModalRows();
+    }
+
+    async function openAccountTransactionsModal(accountName, preserveSort = false) {
       activeModalAccount = accountName;
+      if (!preserveSort) {
+        acctModalSortCol = "date";
+        acctModalSortDir = "desc";
+      }
       document.getElementById("acct-modal-title").textContent = `${accountName} — All Transactions`;
       document.getElementById("acct-modal-summary").innerHTML = `<span class="text-slate-400">Loading...</span>`;
       document.getElementById("acct-modal-tbody").innerHTML = "";
@@ -2970,12 +3740,16 @@
         else if (t !== "all" && t !== "self_transfer" && t !== "claimable") {
           if (r.is_self_transfer || r.tx_type !== t) return false;
         }
+        if (t !== "self_transfer" && hideSelfTransfers && r.is_self_transfer) return false;
         if (q) {
           const hay = `${r.merchant} ${r.subject || ""} ${r.category}`.toLowerCase();
           if (!hay.includes(q)) return false;
         }
         return true;
       });
+
+      _updateModalSortIndicators("acct-sort-ind", ACCT_MODAL_SORT_COLS, acctModalSortCol, acctModalSortDir);
+      _sortModalEntryRows(rows, acctModalSortCol, acctModalSortDir);
 
       const inTot = rows.filter((r) => r.tx_type === "income" || r.tx_type === "repayment").reduce((s, r) => s + r.amount_myr, 0);
       const outTot = rows.filter((r) => r.tx_type === "expense").reduce((s, r) => s + r.amount_myr, 0);
@@ -3232,43 +4006,40 @@
     }
 
     function _refreshActiveEntryModal() {
-      if (activeModalDate) { openDayTransactionsModal(activeModalDate); }
-      else if (activeModalCategory) { openCategoryTransactionsModal(activeModalCategory); }
-      if (activeModalAccount) { openAccountTransactionsModal(activeModalAccount); }
+      if (activeModalDate) { openDayTransactionsModal(activeModalDate, true); }
+      else if (activeModalCategory) { openCategoryTransactionsModal(activeModalCategory, true); }
+      else if (activeModalKpi) { openKpiTransactionsModal(activeModalKpi, true); }
+      else if (activeModalTransfer) {
+        const { name, entryIds, direction } = activeModalTransfer;
+        openTransferPersonModal(name, entryIds, direction, true);
+      }
+      if (activeModalAccount) { openAccountTransactionsModal(activeModalAccount, true); }
     }
 
     function closeDayTransactionsModal() {
       activeModalDate = null;
       activeModalCategory = null;
+      activeModalKpi = null;
+      activeModalTransfer = null;
       hideOverlay(document.getElementById("day-tx-modal-backdrop"));
     }
 
-    async function openEmailEntriesModal(senderEmail = null) {
-      document.getElementById("email-modal-title").textContent = senderEmail
-        ? `Received Emails from ${senderEmail}`
-        : "All Received Emails (Trusted Senders)";
-      document.getElementById("email-modal-summary").innerHTML = `<span class="text-slate-400">Loading...</span>`;
-      document.getElementById("email-modal-tbody").innerHTML = "";
-      showOverlay(document.getElementById("email-modal-backdrop"));
+    let activeEmailEntries = [];
+    let emailModalSortCol = "date";
+    let emailModalSortDir = "desc";
 
-      const res = await fetch("/api/wealth/entries");
-      const all = await res.json();
-      const emailEntries = all.filter((r) => {
-        const isEmail = !r.sender_email.startsWith("statement@") && r.sender_email !== "manual@local";
-        if (!isEmail) return false;
-        if (senderEmail) return r.sender_email.toLowerCase() === senderEmail.toLowerCase();
-        return true;
-      });
+    function toggleEmailModalSort(col) {
+      [emailModalSortCol, emailModalSortDir] = _nextModalSortState(emailModalSortCol, emailModalSortDir, col);
+      renderEmailModalRows();
+    }
 
-      const totalIn = emailEntries.filter((r) => !r.is_self_transfer && (r.tx_type === "income" || r.tx_type === "repayment")).reduce((acc, r) => acc + r.amount_myr, 0);
-      const totalOut = emailEntries.filter((r) => !r.is_self_transfer && r.tx_type === "expense").reduce((acc, r) => acc + r.amount_myr, 0);
-      document.getElementById("email-modal-summary").innerHTML = `
-        <span class="text-sky-300 font-semibold">${emailEntries.length} email${emailEntries.length === 1 ? "" : "s"}</span>
-        <span class="text-emerald-400 font-semibold">Income: +${fmtMYR(totalIn)}</span>
-        <span class="text-rose-400 font-semibold">Expense: -${fmtMYR(totalOut)}</span>
-      `;
-      document.getElementById("email-modal-tbody").innerHTML = emailEntries.length
-        ? emailEntries.map((r) => `
+    function renderEmailModalRows() {
+      _updateModalSortIndicators("email-sort-ind", EMAIL_MODAL_SORT_COLS, emailModalSortCol, emailModalSortDir);
+      const rows = [...activeEmailEntries];
+      const sortCol = emailModalSortCol === "merchant" ? "details" : emailModalSortCol;
+      _sortModalEntryRows(rows, sortCol, emailModalSortDir);
+      document.getElementById("email-modal-tbody").innerHTML = rows.length
+        ? rows.map((r) => `
           <tr class="hover:bg-slate-800/40">
             <td class="py-2.5 pr-2 text-slate-400 whitespace-nowrap">${r.occurred_at.slice(0, 10)}</td>
             <td class="py-2.5 pr-2">
@@ -3281,12 +4052,46 @@
         : `<tr><td colspan="4" class="py-6 text-center text-slate-500">No synced emails found.</td></tr>`;
     }
 
+    async function openEmailEntriesModal(senderEmail = null) {
+      emailModalSortCol = "date";
+      emailModalSortDir = "desc";
+      document.getElementById("email-modal-title").textContent = senderEmail
+        ? `Received Emails from ${senderEmail}`
+        : "All Received Emails (Trusted Senders)";
+      document.getElementById("email-modal-summary").innerHTML = `<span class="text-slate-400">Loading...</span>`;
+      document.getElementById("email-modal-tbody").innerHTML = "";
+      showOverlay(document.getElementById("email-modal-backdrop"));
+
+      const res = await fetch("/api/wealth/entries");
+      const all = await res.json();
+      activeEmailEntries = all.filter((r) => {
+        const isEmail = !r.sender_email.startsWith("statement@") && r.sender_email !== "manual@local";
+        if (!isEmail) return false;
+        if (senderEmail) return r.sender_email.toLowerCase() === senderEmail.toLowerCase();
+        return true;
+      });
+
+      const totalIn = activeEmailEntries.filter((r) => !r.is_self_transfer && (r.tx_type === "income" || r.tx_type === "repayment")).reduce((acc, r) => acc + r.amount_myr, 0);
+      const totalOut = activeEmailEntries.filter((r) => !r.is_self_transfer && r.tx_type === "expense").reduce((acc, r) => acc + r.amount_myr, 0);
+      document.getElementById("email-modal-summary").innerHTML = `
+        <span class="text-sky-300 font-semibold">${activeEmailEntries.length} email${activeEmailEntries.length === 1 ? "" : "s"}</span>
+        <span class="text-emerald-400 font-semibold">Income: +${fmtMYR(totalIn)}</span>
+        <span class="text-rose-400 font-semibold">Expense: -${fmtMYR(totalOut)}</span>
+      `;
+      renderEmailModalRows();
+    }
+
     function closeEmailEntriesModal() {
       hideOverlay(document.getElementById("email-modal-backdrop"));
     }
 
     document.addEventListener("keydown", (e) => {
       if (e.key === "Escape") {
+        const addBackdrop = document.getElementById("add-transaction-modal-backdrop");
+        if (addBackdrop && !addBackdrop.classList.contains("hidden")) {
+          closeAddTransactionModal();
+          return;
+        }
         if (activeModalDate) closeDayTransactionsModal();
         closeEmailEntriesModal();
       }
@@ -3482,9 +4287,9 @@
         const exp = info ? info.expense_myr : 0;
         const hasTx = inc > 0 || rep > 0 || exp > 0;
         cells.push(`
-          <button type="button" onclick="openDayTransactionsModal('${dateStr}')" class="min-h-16 rounded-lg p-1.5 text-center flex flex-col justify-between border transition ${hasTx ? "bg-[#0B0C0E] hover:bg-[#1E1F25] border-white/[0.1] cursor-pointer" : "bg-[#0B0C0E]/50 hover:bg-[#16171C] border-white/[0.04]"}">
-            <div class="text-[11px] font-mono-num font-semibold w-full text-center ${hasTx ? "text-[#F7F8F8]" : "text-[#6B7280]"}">${day}</div>
-            <div class="space-y-0.5 text-[10px] font-mono-num leading-tight truncate w-full text-center">
+          <button type="button" onclick="openDayTransactionsModal('${dateStr}')" class="min-h-14 sm:min-h-16 rounded-lg p-1 sm:p-1.5 text-center flex flex-col justify-between border transition ${hasTx ? "bg-[#0B0C0E] hover:bg-[#1E1F25] border-white/[0.1] cursor-pointer" : "bg-[#0B0C0E]/50 hover:bg-[#16171C] border-white/[0.04]"}">
+            <div class="text-[10px] sm:text-[11px] font-mono-num font-semibold w-full text-center ${hasTx ? "text-[#F7F8F8]" : "text-[#6B7280]"}">${day}</div>
+            <div class="space-y-0.5 text-[9px] sm:text-[10px] font-mono-num leading-tight truncate w-full text-center">
               ${inc > 0 ? `<div class="text-[#34D399] font-medium truncate">+${inc.toFixed(0)}</div>` : ""}
               ${rep > 0 ? `<div class="text-[#818CF8] font-medium truncate">+${rep.toFixed(0)} R</div>` : ""}
               ${exp > 0 ? `<div class="text-[#F87171] font-medium truncate">-${exp.toFixed(0)}</div>` : ""}
@@ -3493,17 +4298,70 @@
       }
       wrap.innerHTML = `
         <div class="text-xs font-semibold text-[#E5E7EB] mb-2 text-center">${firstDay.toLocaleString("en-US", { month: "long", year: "numeric" })}</div>
-        <div class="grid grid-cols-7 gap-1.5">${headers}${cells.join("")}</div>
+        <div class="grid grid-cols-7 gap-1 sm:gap-1.5">${headers}${cells.join("")}</div>
       `;
     }
 
     let lastCashflowSum = null;
     let lastAllSum = null;
 
-    async function renderCashflowWithCompare() {
-      if (lastCashflowSum) {
-        await renderCashflowChartOnly(lastCashflowSum);
+    function _buildFilteredDailySum(sum) {
+      if (!sum || excludedCategories.size === 0) return sum;
+      const byDate = {};
+      for (const d of (sum.daily_series || [])) {
+        byDate[d.date] = { date: d.date, income_myr: 0, repayment_myr: 0, expense_myr: 0 };
       }
+      for (const r of (allEntriesCache || [])) {
+        if (r.is_self_transfer || excludedCategories.has(r.category)) continue;
+        const dt = (r.occurred_at || "").slice(0, 10);
+        if (!dt) continue;
+        if (!byDate[dt]) byDate[dt] = { date: dt, income_myr: 0, repayment_myr: 0, expense_myr: 0 };
+        if (r.tx_type === "income") {
+          byDate[dt].income_myr += Number(r.amount_myr || 0);
+        } else if (r.tx_type === "repayment") {
+          byDate[dt].repayment_myr += Number(r.amount_myr || 0);
+        } else {
+          const net = r.net_amount_myr !== null && r.net_amount_myr !== undefined ? r.net_amount_myr : r.amount_myr;
+          byDate[dt].expense_myr += Number(net || 0);
+        }
+      }
+      const daily_series = Object.keys(byDate).sort().map((k) => ({
+        date: k,
+        income_myr: Math.round(byDate[k].income_myr * 100) / 100,
+        repayment_myr: Math.round(byDate[k].repayment_myr * 100) / 100,
+        expense_myr: Math.round(byDate[k].expense_myr * 100) / 100,
+      }));
+      return { ...sum, daily_series };
+    }
+
+    function _syncCategoryResetBtn() {
+      const btn = document.getElementById("cat-filter-reset");
+      if (btn) btn.classList.toggle("hidden", excludedCategories.size === 0);
+    }
+
+    async function renderFilteredCashflowAndCalendar() {
+      _syncCategoryResetBtn();
+      if (!lastCashflowSum) return;
+      const filteredSum = _buildFilteredDailySum(lastCashflowSum);
+      renderCashflowCalendar(filteredSum);
+      await renderCashflowChartOnly(filteredSum);
+    }
+
+    async function resetExcludedCategories() {
+      excludedCategories.clear();
+      if (categoryChart) {
+        (categoryChart.data.labels || []).forEach((_, idx) => {
+          if (!categoryChart.getDataVisibility(idx)) {
+            categoryChart.toggleDataVisibility(idx);
+          }
+        });
+        categoryChart.update();
+      }
+      await renderFilteredCashflowAndCalendar();
+    }
+
+    async function renderCashflowWithCompare() {
+      await renderFilteredCashflowAndCalendar();
     }
 
     async function renderCashflowChartOnly(sum) {
@@ -3582,8 +4440,10 @@
     function renderCharts(sum, allSum) {
       lastCashflowSum = sum;
       lastAllSum = allSum;
-      renderCashflowCalendar(sum);
-      renderCashflowChartOnly(sum);
+      _syncCategoryResetBtn();
+      const filteredSum = _buildFilteredDailySum(sum);
+      renderCashflowCalendar(filteredSum);
+      renderCashflowChartOnly(filteredSum);
 
       const catLabels = Object.keys(sum.category_breakdown);
       const catVals = Object.values(sum.category_breakdown);
@@ -3595,11 +4455,7 @@
           datasets: [{
             data: catVals,
             borderWidth: 0,
-            backgroundColor: [
-              "#5E6AD2", "#F87171", "#34D399", "#FBBF24", "#38BDF8",
-              "#A78BFA", "#FB923C", "#2DD4BF", "#F472B6", "#94A3B8",
-              "#A3E635", "#60A5FA"
-            ]
+            backgroundColor: catLabels.map((c) => getCategoryColor(c))
           }]
         },
         options: {
@@ -3614,21 +4470,36 @@
             legend: {
               position: "bottom",
               labels: { color: "#cbd5e1" },
-              onClick: (_event, legendItem) => {
-                if (legendItem && legendItem.text) openCategoryTransactionsModal(legendItem.text);
+              onClick: (_event, legendItem, legend) => {
+                const cat = legendItem && legendItem.text;
+                if (!cat) return;
+                if (excludedCategories.has(cat)) excludedCategories.delete(cat);
+                else excludedCategories.add(cat);
+                legend.chart.toggleDataVisibility(legendItem.index);
+                legend.chart.update();
+                renderFilteredCashflowAndCalendar();
               },
             },
           },
         },
       });
+      if (excludedCategories.size > 0) {
+        let changedVis = false;
+        catLabels.forEach((cat, idx) => {
+          if (excludedCategories.has(cat) && categoryChart.getDataVisibility(idx)) {
+            categoryChart.toggleDataVisibility(idx);
+            changedVis = true;
+          }
+        });
+        if (changedVis) categoryChart.update();
+      }
 
-      const palette = ["#f43f5e", "#f59e0b", "#38bdf8", "#a855f7", "#10b981", "#64748b", "#ec4899"];
       const months = (allSum.monthly_series || []).map((m) => m.month);
       const allCats = Array.from(new Set((allSum.monthly_series || []).flatMap((m) => Object.keys(m.categories))));
-      const monthlyDatasets = allCats.map((cat, idx) => ({
+      const monthlyDatasets = allCats.map((cat) => ({
         label: cat,
         data: (allSum.monthly_series || []).map((m) => m.categories[cat] || 0),
-        backgroundColor: palette[idx % palette.length],
+        backgroundColor: getCategoryColor(cat),
       }));
       if (monthlyCatChart) monthlyCatChart.destroy();
       monthlyCatChart = new Chart(document.getElementById("monthly-cat-chart"), {
@@ -3723,6 +4594,11 @@
       e.target.reset(); document.getElementById("add-asset-drawer").classList.add("hidden"); await loadAssets();
     }
 
+    let lastGeneratedRecipe = null;
+    function _escTaste(s) {
+      return String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+    }
+
     async function loadKitchen() {
       const [itemsRes, targetRes] = await Promise.all([fetch("/api/kitchen/items"), fetch("/api/kitchen/target")]);
       const items = await itemsRes.json(); const target = await targetRes.json();
@@ -3732,8 +4608,8 @@
       document.getElementById("kitchen-items-list").innerHTML = items.map((i) => `
         <div class="flex items-center justify-between p-3 rounded-xl border ${i.is_expiring_soon ? "bg-amber-950/40 border-amber-500/50" : "bg-slate-950 border-slate-800"}">
           <div>
-            <div class="font-medium text-white text-sm">${i.name} <span class="text-xs text-slate-400">(${i.quantity} ${i.unit} · ${i.source})</span></div>
-            <div class="text-xs ${i.is_expiring_soon ? "text-amber-300 font-semibold" : "text-slate-400"}">Day ${i.days_elapsed} of ${i.shelf_life_days} · ${i.days_remaining <= 0 ? "EXPIRES TODAY!" : `${i.days_remaining}d left`}</div>
+            <div class="font-medium text-white text-sm">${_escTaste(i.name)} ${i.is_staple ? '<span class="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-sky-300 ml-1">Staple</span>' : ''} <span class="text-xs text-slate-400">(${i.quantity} ${_escTaste(i.unit)} · ${_escTaste(i.source)})</span></div>
+            <div class="text-xs ${i.is_expiring_soon ? "text-amber-300 font-semibold" : "text-slate-400"}">${i.is_staple ? "Pantry staple · no expiry" : `Day ${i.days_elapsed} of ${i.shelf_life_days} · ${i.days_remaining <= 0 ? "EXPIRES TODAY!" : `${i.days_remaining}d left`}`}</div>
           </div>
           <div class="flex items-center gap-1.5">
             <button onclick="adjustKitchenItem(${i.id}, -1)" class="text-xs px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200">-1</button>
@@ -3741,12 +4617,229 @@
             <button onclick="consumeKitchenItem(${i.id})" class="text-xs px-2 py-1 rounded-lg bg-slate-800 hover:bg-rose-800 text-rose-300">&times;</button>
           </div>
         </div>`).join("");
+      await loadTasteBrain();
+    }
+
+    async function loadTasteBrain() {
+      const [analysisRes, rulesRes, profilesRes, shoppingRes, feedbackRes] = await Promise.all([
+        fetch("/api/kitchen/taste/analysis"),
+        fetch("/api/kitchen/taste/rules"),
+        fetch("/api/kitchen/taste/profiles"),
+        fetch("/api/kitchen/shopping-list"),
+        fetch("/api/kitchen/taste/feedback"),
+      ]);
+      if (!analysisRes.ok) return;
+      const analysis = await analysisRes.json();
+      const rules = await rulesRes.json();
+      const profiles = await profilesRes.json();
+      const shopping = shoppingRes.ok ? await shoppingRes.json() : [];
+      const feedbackLogs = feedbackRes.ok ? await feedbackRes.json() : [];
+
+      const p = analysis.palate;
+      document.getElementById("palate-feedback-badge").textContent = `${p.feedback_count} rating${p.feedback_count === 1 ? "" : "s"} learned`;
+      const dims = [
+        ["Umami", p.umami, "bg-emerald-500"],
+        ["Sour", p.sour, "bg-lime-400"],
+        ["Sweet", p.sweet, "bg-amber-400"],
+        ["Spicy", p.spicy, "bg-rose-500"],
+        ["Salty", p.salty, "bg-sky-400"],
+        ["Richness", p.richness, "bg-orange-400"],
+        ["Bitter", p.bitter, "bg-purple-400"],
+      ];
+      document.getElementById("palate-bars").innerHTML = dims.map(([label, val, color]) => `
+        <div class="flex items-center gap-2">
+          <span class="w-16 text-slate-400">${label}</span>
+          <div class="flex-1 h-2 bg-slate-900 rounded-full overflow-hidden">
+            <div class="h-full ${color}" style="width: ${Math.round(val * 100)}%"></div>
+          </div>
+          <span class="w-10 text-right text-slate-300">${Math.round(val * 100)}%</span>
+        </div>`).join("");
+
+      const analysisHtml = [];
+      for (const r of (analysis.applied_rules || [])) {
+        analysisHtml.push(`<div class="p-2 rounded-lg bg-emerald-950/30 border border-emerald-500/20"><span class="font-semibold text-emerald-300">${_escTaste(r.title)}</span> (${_escTaste(r.matched_ingredients.join(", "))}) — ${_escTaste(r.rationale)}</div>`);
+      }
+      for (const h of (analysis.missing_balance_hints || [])) {
+        const safeHint = _escTaste(h);
+        analysisHtml.push(`<div class="p-2 rounded-lg bg-amber-950/30 border border-amber-500/20 text-amber-200 flex items-center justify-between gap-2"><span>${safeHint}</span><button onclick="addHintToShoppingList(this.dataset.hint)" data-hint="${safeHint}" class="shrink-0 text-[11px] px-2 py-0.5 rounded bg-amber-600/40 hover:bg-amber-600 text-amber-100">+ Shop</button></div>`);
+      }
+      for (const pa of (analysis.top_pair_affinities || [])) {
+        analysisHtml.push(`<div class="p-2 rounded-lg bg-sky-950/30 border border-sky-500/20 text-sky-200">Pair affinity: <span class="font-semibold">${_escTaste(pa.ingredient_a)} + ${_escTaste(pa.ingredient_b)}</span> (score ${pa.affinity_score >= 0 ? "+" : ""}${pa.affinity_score}, ${pa.times_paired}x)</div>`);
+      }
+      document.getElementById("taste-analysis-list").innerHTML = analysisHtml.length
+        ? analysisHtml.join("")
+        : `<div class="text-slate-500">Add more ingredients or taste profiles to see live pairing rules.</div>`;
+
+      document.getElementById("taste-rules-list").innerHTML = rules.map((r) => `
+        <div class="flex items-start justify-between gap-2 p-2 rounded-lg bg-slate-900 border border-slate-800 text-xs">
+          <div>
+            <div class="font-semibold text-amber-300">${_escTaste(r.title)} <span class="text-slate-400 font-normal">(${_escTaste(r.primary_taste)} + ${_escTaste(r.pair_tastes)} · w=${r.weight})</span></div>
+            <div class="text-slate-400">${_escTaste(r.rationale)}</div>
+          </div>
+          <button onclick="deleteTasteRule(${r.id})" class="text-slate-500 hover:text-rose-400 font-bold px-1">&times;</button>
+        </div>`).join("");
+
+      document.getElementById("taste-profiles-list").innerHTML = profiles.map((prof) => {
+        const tags = [["sw", prof.sweet], ["so", prof.sour], ["sa", prof.salty], ["um", prof.umami], ["sp", prof.spicy]]
+          .filter(([, v]) => v > 0)
+          .map(([k, v]) => `${k}:${v}`)
+          .join(" ");
+        const tech = [prof.cooking_method, prof.texture, prof.aroma].filter(Boolean).join(" · ");
+        return `
+          <div class="flex items-start justify-between gap-2 p-2.5 rounded-lg bg-slate-900 border border-slate-800 text-xs">
+            <div>
+              <div class="font-semibold text-white">${_escTaste(prof.name)} <span class="text-sky-400 font-normal">${tags}</span></div>
+              ${tech ? `<div class="text-[11px] text-emerald-400">${_escTaste(tech)}</div>` : ""}
+              <div class="text-slate-400">${_escTaste(prof.notes || "No notes")}</div>
+            </div>
+            <button onclick="deleteTasteProfile(${prof.id})" class="text-slate-500 hover:text-rose-400 font-bold px-1">&times;</button>
+          </div>`;
+      }).join("");
+
+      document.getElementById("shopping-list-items").innerHTML = shopping.length
+        ? shopping.map((s) => `
+          <div class="flex items-center justify-between gap-2 p-2 rounded-lg bg-slate-900 border border-slate-800 text-xs">
+            <label class="flex items-center gap-2 cursor-pointer ${s.is_checked ? "line-through text-slate-500" : "text-slate-200"}">
+              <input type="checkbox" ${s.is_checked ? "checked" : ""} onchange="toggleShoppingItem(${s.id})" class="rounded bg-slate-950 border-slate-700" />
+              <span class="font-medium">${_escTaste(s.name)}</span>
+              ${s.reason ? `<span class="text-slate-400">— ${_escTaste(s.reason)}</span>` : ""}
+            </label>
+            <button onclick="deleteShoppingItem(${s.id})" class="text-slate-500 hover:text-rose-400 font-bold px-1">&times;</button>
+          </div>`).join("")
+        : `<div class="text-xs text-slate-500">Shopping list is empty.</div>`;
+
+      document.getElementById("taste-feedback-log").innerHTML = feedbackLogs.length
+        ? feedbackLogs.map((f) => `
+          <div class="p-2 rounded-lg bg-slate-900 border border-slate-800">
+            <div class="flex items-center justify-between">
+              <span class="font-semibold text-white">${_escTaste(f.dish_title)}</span>
+              <span class="text-[11px] px-2 py-0.5 rounded bg-slate-800 text-amber-300">${_escTaste(f.verdict)}</span>
+            </div>
+            <div class="text-slate-400 text-[11px]">${_escTaste(f.ingredients_used || "—")}</div>
+          </div>`).join("")
+        : `<div class="text-slate-500">No meal ratings logged yet.</div>`;
+    }
+
+    async function addTasteRule(e) {
+      e.preventDefault();
+      await fetch("/api/kitchen/taste/rules", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: document.getElementById("tr-title").value.trim(),
+          primary_taste: document.getElementById("tr-primary").value,
+          pair_tastes: document.getElementById("tr-pair").value.trim(),
+          rationale: document.getElementById("tr-rationale").value.trim(),
+        }),
+      });
+      e.target.reset();
+      showToast("Saved pairing rule to Taste Knowledgebase.", "ok");
+      await loadTasteBrain();
+    }
+    async function deleteTasteRule(id) {
+      await fetch(`/api/kitchen/taste/rules/${id}`, { method: "DELETE" });
+      await loadTasteBrain();
+    }
+    async function addTasteProfile(e) {
+      e.preventDefault();
+      await fetch("/api/kitchen/taste/profiles", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: document.getElementById("tp-name").value.trim(),
+          sweet: parseFloat(document.getElementById("tp-sweet").value) || 0,
+          sour: parseFloat(document.getElementById("tp-sour").value) || 0,
+          salty: parseFloat(document.getElementById("tp-salty").value) || 0,
+          umami: parseFloat(document.getElementById("tp-umami").value) || 0,
+          spicy: parseFloat(document.getElementById("tp-spicy").value) || 0,
+          texture: document.getElementById("tp-texture").value.trim(),
+          aroma: document.getElementById("tp-aroma").value.trim(),
+          cooking_method: document.getElementById("tp-method").value.trim(),
+          notes: document.getElementById("tp-notes").value.trim(),
+        }),
+      });
+      e.target.reset();
+      showToast("Saved ingredient taste vector.", "ok");
+      await loadTasteBrain();
+    }
+    async function autoProfileUnknownItems() {
+      const res = await fetch("/api/kitchen/taste/auto-profile", { method: "POST" });
+      const data = await res.json();
+      const count = (data.created_profiles || []).length;
+      showToast(count ? `Auto-profiled ${count} ingredient(s) via ${data.engine}.` : "All fridge items already have taste profiles.", "ok");
+      await loadTasteBrain();
+    }
+    async function markMealCooked() {
+      if (!lastGeneratedRecipe) return;
+      const res = await fetch("/api/kitchen/cooked", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          dish_title: lastGeneratedRecipe.title,
+          ingredients_used: lastGeneratedRecipe.ingredients_used || [],
+          deduct_qty: 1,
+        }),
+      });
+      const data = await res.json();
+      showToast(`Deducted ${data.deducted_items.length + data.removed_items.length} item(s) (${data.skipped_staples.length} staple skipped).`, "ok");
+      await loadKitchen();
+    }
+    async function addHintToShoppingList(hintText) {
+      const m = hintText.match(/add\s+([^\(]+?)(?:\s*\(e\.g\.\s*([^)]+)\))?\s*—/i);
+      const name = m ? (m[2] ? m[2].split(",")[0].trim() : m[1].trim()) : "Balance Ingredient";
+      await fetch("/api/kitchen/shopping-list", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, reason: hintText }),
+      });
+      showToast(`Added "${name}" to shopping list.`, "ok");
+      await loadTasteBrain();
+    }
+    async function addShoppingItemManual(e) {
+      e.preventDefault();
+      await fetch("/api/kitchen/shopping-list", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: document.getElementById("sl-name").value.trim(),
+          reason: document.getElementById("sl-reason").value.trim(),
+        }),
+      });
+      e.target.reset();
+      await loadTasteBrain();
+    }
+    async function toggleShoppingItem(id) {
+      await fetch(`/api/kitchen/shopping-list/${id}/toggle`, { method: "PATCH" });
+      await loadTasteBrain();
+    }
+    async function deleteShoppingItem(id) {
+      await fetch(`/api/kitchen/shopping-list/${id}`, { method: "DELETE" });
+      await loadTasteBrain();
+    }
+    async function deleteTasteProfile(id) {
+      await fetch(`/api/kitchen/taste/profiles/${id}`, { method: "DELETE" });
+      await loadTasteBrain();
+    }
+    async function submitTasteFeedback(verdict) {
+      if (!lastGeneratedRecipe) return;
+      await fetch("/api/kitchen/taste/feedback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          dish_title: lastGeneratedRecipe.title,
+          ingredients_used: lastGeneratedRecipe.ingredients_used || [],
+          applied_rule_ids: lastGeneratedRecipe.applied_rule_ids || [],
+          verdict,
+        }),
+      });
+      showToast(`Taste AI learned from your feedback (${verdict.replace("_", " ")}).`, "ok");
+      await loadTasteBrain();
     }
     async function adjustKitchenItem(id, delta) { await fetch(`/api/kitchen/items/${id}/adjust?delta=${delta}`, { method: "PATCH" }); await loadKitchen(); }
     async function consumeKitchenItem(id) { await fetch(`/api/kitchen/items/${id}`, { method: "DELETE" }); await loadKitchen(); }
     async function addKitchenItemManual(e) {
       e.preventDefault();
-      await fetch("/api/kitchen/items", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: document.getElementById("km-name").value.trim(), quantity: parseFloat(document.getElementById("km-qty").value) }) });
+      await fetch("/api/kitchen/items", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: document.getElementById("km-name").value.trim(), quantity: parseFloat(document.getElementById("km-qty").value), is_staple: document.getElementById("km-staple").checked }) });
       e.target.reset(); showToast("Added item to fridge.", "ok"); await loadKitchen();
     }
     async function scanReceiptPhoto(e) {
@@ -3764,8 +4857,17 @@
     }
     async function generateDinnerRecipe() {
       const res = await fetch("/api/kitchen/recipe", { method: "POST" }); const r = await res.json();
+      lastGeneratedRecipe = r;
       document.getElementById("recipe-title").textContent = r.title;
       document.getElementById("recipe-engine").textContent = r.engine;
+      const notesEl = document.getElementById("recipe-taste-notes");
+      if (r.taste_notes && r.taste_notes.length) {
+        notesEl.innerHTML = `<div class="font-semibold text-emerald-200">Why these flavors work together:</div>` +
+          r.taste_notes.map((n) => `<div>• ${_escTaste(n)}</div>`).join("");
+        notesEl.classList.remove("hidden");
+      } else {
+        notesEl.classList.add("hidden");
+      }
       document.getElementById("recipe-body").textContent = r.instructions;
       document.getElementById("recipe-box").classList.remove("hidden");
     }
@@ -3965,7 +5067,7 @@
 
     async function refreshAll() {
       await loadSettings();
-      await Promise.all([loadWhitelist(), loadWealthData(), loadConflicts(), loadDeletionLogs(), loadAssets(), loadKitchen(), loadTrainer(), loadFriction()]);
+      await Promise.all([loadSecurityAuditLogs(), loadWhitelist(), loadWealthData(), loadConflicts(), loadDeletionLogs(), loadAssets(), loadKitchen(), loadTrainer(), loadFriction()]);
     }
 
     function connectWealthStream() {

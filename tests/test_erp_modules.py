@@ -6,6 +6,15 @@ from app.database import Base
 from app.modules.friction import service as friction_service
 from app.modules.friction.schemas import LogOdometerRequest
 from app.modules.kitchen import service as kitchen_service
+from app.modules.kitchen import taste as kitchen_taste
+from app.modules.kitchen.schemas import (
+    AddKitchenItemRequest,
+    CookedMealRequest,
+    ShoppingListCreate,
+    TasteFeedbackRequest,
+    TasteProfileUpsert,
+    TasteRuleCreate,
+)
 from app.modules.trainer import service as trainer_service
 from app.modules.trainer.schemas import LogWorkoutRequest
 from app.modules.wealth import service as wealth_service
@@ -20,7 +29,17 @@ def _make_session():
 
 def test_trainer_updates_kitchen_dinner_recovery():
     db = _make_session()
-    kitchen_service.seed_default_kitchen(db)
+    kitchen_service.add_item(
+        db,
+        AddKitchenItemRequest(
+            name="Fresh Kangkung",
+            category="Produce",
+            quantity=1,
+            unit="bunch",
+            shelf_life_days=6,
+            days_old=5,
+        ),
+    )
 
     items = kitchen_service.list_items(db)
     kangkung = next(i for i in items if "Kangkung" in i.name)
@@ -102,7 +121,10 @@ def test_local_onnx_receipt_ocr():
 
 def test_kitchen_adjust_quantity_and_wealth_toggle():
     db = _make_session()
-    kitchen_service.seed_default_kitchen(db)
+    kitchen_service.add_item(
+        db,
+        AddKitchenItemRequest(name="Kampung Eggs", category="Protein", quantity=10, unit="pcs"),
+    )
     eggs = next(i for i in kitchen_service.list_items(db) if "Eggs" in i.name)
     assert eggs.quantity == 10.0
 
@@ -157,6 +179,27 @@ def test_fastapi_endpoints_smoke(monkeypatch, tmp_path):
     try:
         with TestClient(app_main.app) as client:
             assert client.get("/api/health").status_code == 200
+            # Unauthenticated API requests must be rejected
+            assert client.get("/api/wealth/summary").status_code == 401
+            assert client.get("/", follow_redirects=False).status_code == 303
+
+            # Bootstrap owner account
+            csrf_res = client.get("/api/auth/csrf")
+            assert csrf_res.status_code == 200
+            pre_csrf = csrf_res.json()["csrf_token"]
+            reg = client.post(
+                "/api/auth/register",
+                json={
+                    "full_name": "Smoke Owner",
+                    "email": "owner@example.com",
+                    "password": "Strong!Password#2026",
+                },
+                headers={"X-CSRF-Token": pre_csrf},
+            )
+            assert reg.status_code == 201
+            csrf_token = client.cookies.get("erp_csrf", "")
+            assert csrf_token
+
             assert client.get("/").status_code == 200
             assert client.get("/api/wealth/summary").status_code == 200
             assert client.get("/api/wealth/summary?month=2026-11").status_code == 200
@@ -181,18 +224,150 @@ def test_fastapi_endpoints_smoke(monkeypatch, tmp_path):
                     "default_calories": 2200,
                     "default_protein_g": 150,
                 },
+                headers={"X-CSRF-Token": csrf_token},
             )
             assert put_resp.status_code == 200
             updated = put_resp.json()
             assert updated["auto_sync_hour"] == 8
             assert updated["monthly_budget_myr"] == 3500.0
 
-            sync_resp = client.post("/api/settings/run-auto-sync")
+            sync_resp = client.post(
+                "/api/settings/run-auto-sync",
+                headers={"X-CSRF-Token": csrf_token},
+            )
             assert sync_resp.status_code == 200
             synced = sync_resp.json()
             assert synced["last_auto_sync_at"] is not None
             assert synced["last_auto_sync_status"].startswith("OK:")
+
+            assert client.get("/api/kitchen/taste/analysis").status_code == 200
+            assert client.get("/api/kitchen/taste/rules").status_code == 200
+            assert client.get("/api/kitchen/taste/profiles").status_code == 200
+            fb_resp = client.post(
+                "/api/kitchen/taste/feedback",
+                json={
+                    "dish_title": "Smoke Dish",
+                    "ingredients_used": ["Tomato", "Chili Padi"],
+                    "applied_rule_ids": [],
+                    "verdict": "loved",
+                },
+                headers={"X-CSRF-Token": csrf_token},
+            )
+            assert fb_resp.status_code == 200
+            assert fb_resp.json()["palate"]["feedback_count"] == 1
     finally:
         app_main.app.dependency_overrides.clear()
         test_engine.dispose()
+
+
+def test_kitchen_taste_knowledgebase_and_learning():
+    db = _make_session()
+    kitchen_taste.upsert_profile(
+        db,
+        TasteProfileUpsert(name="Chili Padi", spicy=0.95, notes="Sharp heat"),
+    )
+    kitchen_taste.upsert_profile(
+        db,
+        TasteProfileUpsert(name="Tomato", sour=0.7, sweet=0.4, umami=0.6, notes="Tames heat"),
+    )
+    kitchen_taste.create_rule(
+        db,
+        TasteRuleCreate(
+            title="Sour + Sweet tames Spicy",
+            primary_taste="spicy",
+            pair_tastes="sour,sweet",
+            rationale="Sourness and sweetness soften capsaicin burn and boost flavor.",
+        ),
+    )
+
+    kitchen_service.add_item(db, AddKitchenItemRequest(name="Chili Padi", quantity=5))
+
+    # Only spicy item -> should suggest sour/sweet balance
+    missing_analysis = kitchen_taste.analyze_fridge_taste(db, ["Chili Padi"])
+    assert any("spicy" in hint.lower() and "sour" in hint.lower() for hint in missing_analysis.missing_balance_hints)
+
+    # Add Tomato (sour + sweet) -> should trigger "Sour + Sweet tames Spicy"
+    kitchen_service.add_item(db, AddKitchenItemRequest(name="Tomato", quantity=2))
+    paired_analysis = kitchen_taste.analyze_fridge_taste(db, ["Chili Padi", "Tomato"])
+    assert any("Sour + Sweet tames Spicy" == r.title for r in paired_analysis.applied_rules)
+    rule_id = next(r.rule_id for r in paired_analysis.applied_rules if r.title == "Sour + Sweet tames Spicy")
+
+    recipe = kitchen_service.synthesize_dinner_recipe(db)
+    assert rule_id in recipe.applied_rule_ids
+    assert any("Sour + Sweet tames Spicy" in note for note in recipe.taste_notes)
+
+    # Feedback learning: "too_spicy" lowers spicy preference and boosts counter-rule weight
+    before_palate = kitchen_taste.get_palate(db)
+    fb1 = kitchen_taste.record_feedback(
+        db,
+        TasteFeedbackRequest(
+            dish_title=recipe.title,
+            ingredients_used=["Chili Padi", "Tomato"],
+            applied_rule_ids=[rule_id],
+            verdict="too_spicy",
+        ),
+    )
+    assert fb1.palate.spicy < before_palate.spicy
+    assert fb1.palate.feedback_count == 1
+
+    # Feedback learning: "loved" boosts applied rule weight
+    rules_before = {r.id: r.weight for r in kitchen_taste.list_rules(db)}
+    fb2 = kitchen_taste.record_feedback(
+        db,
+        TasteFeedbackRequest(
+            dish_title=recipe.title,
+            ingredients_used=["Chili Padi", "Tomato"],
+            applied_rule_ids=[rule_id],
+            verdict="loved",
+        ),
+    )
+    rules_after = {r.id: r.weight for r in kitchen_taste.list_rules(db)}
+    assert rules_after[rule_id] > rules_before[rule_id]
+    assert fb2.palate.feedback_count == 2
+
+    # Pair affinity & feedback log
+    post_analysis = kitchen_taste.analyze_fridge_taste(db, ["Chili Padi", "Tomato"])
+    assert any(
+        {p.ingredient_a, p.ingredient_b} == {"chili padi", "tomato"} and p.affinity_score > 0
+        for p in post_analysis.top_pair_affinities
+    )
+    assert len(kitchen_taste.list_feedback_logs(db)) == 2
+
+
+def test_kitchen_auto_profile_cooked_deduct_staples_and_shopping_list():
+    db = _make_session()
+    kitchen_service.add_item(db, AddKitchenItemRequest(name="Tomato", quantity=2))
+    kitchen_service.add_item(
+        db,
+        AddKitchenItemRequest(name="Soy Sauce", quantity=1, days_old=30, shelf_life_days=7, is_staple=True),
+    )
+
+    items = kitchen_service.list_items(db)
+    soy = next(i for i in items if i.name == "Soy Sauce")
+    assert soy.is_staple is True
+    assert soy.is_expiring_soon is False
+
+    # Auto-profile unknown fridge items (works with heuristic fallback if Ollama is offline)
+    auto = kitchen_taste.auto_profile_unknown_ingredients(db, ["Tomato", "Soy Sauce"])
+    assert len(auto.created_profiles) == 2
+    tom = next(p for p in auto.created_profiles if p.name == "Tomato")
+    assert tom.sour > 0 and tom.texture != ""
+
+    # Mark cooked -> deducts Tomato (2 -> 1), skips staple Soy Sauce
+    cooked = kitchen_service.mark_meal_cooked(
+        db,
+        CookedMealRequest(dish_title="Tomato Stir Fry", ingredients_used=["Tomato", "Soy Sauce"], deduct_qty=1.0),
+    )
+    assert any("Tomato" in d for d in cooked.deducted_items)
+    assert "Soy Sauce" in cooked.skipped_staples
+
+    # Shopping list CRUD
+    sl_item = kitchen_service.add_shopping_item(
+        db,
+        ShoppingListCreate(name="Calamansi Lime", reason="Add sour balance"),
+    )
+    assert sl_item.is_checked is False
+    toggled = kitchen_service.toggle_shopping_item(db, sl_item.id)
+    assert toggled is not None and toggled.is_checked is True
+    assert kitchen_service.delete_shopping_item(db, sl_item.id) is True
 
