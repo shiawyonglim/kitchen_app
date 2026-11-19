@@ -376,6 +376,14 @@ def apply_category_model_endpoint(db: Session = Depends(get_db)):
     }
 
 
+@router.get("/widget-config")
+def get_widget_config():
+    return {
+        "widget_api_token": settings.widget_api_token,
+        "ntfy_topic_url": settings.ntfy_topic_url,
+    }
+
+
 @router.post("/notifications/test")
 def test_ntfy_notification():
     from app.modules.wealth.notifications import send_ntfy_notification
@@ -385,6 +393,7 @@ def test_ntfy_notification():
         "Personal ERP Test",
         "Push notifications are connected to your iPhone!",
         tags="white_check_mark",
+        priority="high",
     )
     return {"configured": configured, "sent": sent}
 

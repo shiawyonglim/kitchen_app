@@ -10,6 +10,7 @@ const QRCode = require("qrcode");
 const {
   default: makeWASocket,
   DisconnectReason,
+  downloadMediaMessage,
   useMultiFileAuthState,
 } = require("@whiskeysockets/baileys");
 
@@ -62,7 +63,7 @@ function extractText(msg) {
   ).trim();
 }
 
-async function forwardToApp(rawMessage, sender) {
+async function forwardToApp(rawMessage, sender, imageBase64 = "", imageMime = "image/jpeg") {
   const res = await fetch(API_URL, {
     method: "POST",
     headers: {
@@ -73,6 +74,8 @@ async function forwardToApp(rawMessage, sender) {
       raw_message: rawMessage,
       source: "whatsapp",
       sender: sender || "WhatsApp",
+      image_base64: imageBase64,
+      image_mime: imageMime,
     }),
   });
   if (!res.ok) {
@@ -90,24 +93,58 @@ async function forwardToApp(rawMessage, sender) {
 const pendingBuffers = new Map();
 const BATCH_WINDOW_MS = 5000;
 
-function queueMessageForBatch(chatKey, text, sender) {
+function queueMessageForBatch(chatKey, text, sender, imageBase64 = "", imageMime = "image/jpeg") {
   const existing = pendingBuffers.get(chatKey);
   if (existing) {
     clearTimeout(existing.timer);
-    existing.texts.push(text);
+    if (text) existing.texts.push(text);
+    if (imageBase64) {
+      existing.imageBase64 = imageBase64;
+      existing.imageMime = imageMime;
+    }
   } else {
-    pendingBuffers.set(chatKey, { texts: [text], sender, timer: null });
+    pendingBuffers.set(chatKey, {
+      texts: text ? [text] : [],
+      sender,
+      imageBase64,
+      imageMime,
+      timer: null,
+    });
   }
   const entry = pendingBuffers.get(chatKey);
   entry.timer = setTimeout(async () => {
     pendingBuffers.delete(chatKey);
     const combined = entry.texts.join("\n---\n");
     try {
-      await forwardToApp(combined, entry.sender);
+      await forwardToApp(combined, entry.sender, entry.imageBase64, entry.imageMime);
     } catch (err) {
       console.error("[Bridge] Failed to reach kitchen_app:", err.message);
     }
   }, BATCH_WINDOW_MS);
+}
+
+let reconnectAttempts = 0;
+let reconnectTimer = null;
+
+process.on("unhandledRejection", (reason) => {
+  console.error("[Bridge] Unhandled rejection (recovering):", reason);
+});
+process.on("uncaughtException", (err) => {
+  console.error("[Bridge] Uncaught exception (recovering):", err.message);
+});
+
+function scheduleReconnect() {
+  if (reconnectTimer) return;
+  const delayMs = Math.min(30000, 3000 * Math.pow(2, Math.min(reconnectAttempts, 3)));
+  reconnectAttempts += 1;
+  console.log(`[Bridge] Reconnecting in ${delayMs / 1000}s...`);
+  reconnectTimer = setTimeout(() => {
+    reconnectTimer = null;
+    startBridge().catch((err) => {
+      console.error("[Bridge] Reconnect failed:", err.message);
+      scheduleReconnect();
+    });
+  }, delayMs);
 }
 
 async function startBridge() {
@@ -123,6 +160,7 @@ async function startBridge() {
   sock.ev.on("connection.update", async (update) => {
     const { connection, lastDisconnect, qr } = update;
     if (qr) {
+      reconnectAttempts = 0;
       console.log("\nScan this QR code in Settings -> WhatsApp Listener (or terminal):\n");
       qrcode.generate(qr, { small: true });
       try {
@@ -137,8 +175,9 @@ async function startBridge() {
       const shouldReconnect = code !== DisconnectReason.loggedOut;
       writeStatus({ status: shouldReconnect ? "reconnecting" : "logged_out" });
       console.log("[Bridge] Connection closed. Reconnecting:", shouldReconnect);
-      if (shouldReconnect) startBridge();
+      if (shouldReconnect) scheduleReconnect();
     } else if (connection === "open") {
+      reconnectAttempts = 0;
       const myJid = sock.user?.id || "";
       const myLid = sock.user?.lid || "";
       writeStatus({ status: "connected", qr_data_url: "", user: myJid || myLid });
@@ -169,12 +208,26 @@ async function startBridge() {
       }
 
       const text = extractText(msg);
-      if (!text) continue;
+      let imageBase64 = "";
+      let imageMime = "image/jpeg";
+      if (msg.message?.imageMessage) {
+        try {
+          const buf = await downloadMediaMessage(msg, "buffer", {});
+          imageBase64 = buf.toString("base64");
+          imageMime = msg.message.imageMessage.mimetype || "image/jpeg";
+        } catch (err) {
+          console.error("[Bridge] Failed to download image:", err.message);
+        }
+      }
+      if (!text && !imageBase64) continue;
 
       const sender = msg.pushName || (msg.key.fromMe ? "Me" : remoteJid);
-      queueMessageForBatch(remoteJid, text, sender);
+      queueMessageForBatch(remoteJid, text, sender, imageBase64, imageMime);
     }
   });
 }
 
-startBridge();
+startBridge().catch((err) => {
+  console.error("[Bridge] Initial start error:", err.message);
+  scheduleReconnect();
+});

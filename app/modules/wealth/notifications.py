@@ -17,7 +17,7 @@ def send_ntfy_notification(
     message: str,
     *,
     tags: str = "moneybag",
-    priority: str = "default",
+    priority: str = "high",
 ) -> bool:
     """Send a push notification to the configured ntfy.sh topic URL. Never raises."""
     topic_url = (settings.ntfy_topic_url or "").strip()

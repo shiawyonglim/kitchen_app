@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 import WidgetKit
 
 struct SettingsView: View {
@@ -13,12 +14,34 @@ struct SettingsView: View {
                     LabeledContent("Server", value: SharedConfig.lastBaseURL())
                 }
 
-                Section("Widgets & Notifications") {
+                Section("Widget Setup (Long-press Widget -> Edit Widget)") {
+                    Button("Copy Server URL") {
+                        UIPasteboard.general.string = SharedConfig.lastBaseURL()
+                        testResult = "Copied Server URL to clipboard."
+                    }
+
+                    Button("Copy Widget Token") {
+                        Task {
+                            if appState.widgetToken.isEmpty,
+                               let cfg = try? await APIClient.shared.fetchWidgetConfig() {
+                                appState.widgetToken = cfg.widget_api_token
+                            }
+                            if appState.widgetToken.isEmpty {
+                                testResult = "WIDGET_API_TOKEN is empty on server .env."
+                            } else {
+                                UIPasteboard.general.string = appState.widgetToken
+                                testResult = "Copied Widget Token! Long-press widget -> Edit Widget -> paste it."
+                            }
+                        }
+                    }
+
                     Button("Refresh Home/Lock Screen Widgets") {
                         WidgetCenter.shared.reloadAllTimelines()
                         testResult = "Widget timeline reloaded."
                     }
+                }
 
+                Section("Push Notifications (ntfy)") {
                     Button("Send Test ntfy Push Notification") {
                         Task {
                             do {
@@ -34,7 +57,13 @@ struct SettingsView: View {
                         }
                     }
 
-                    if let msg = testResult {
+                    if !appState.ntfyTopicURL.isEmpty {
+                        LabeledContent("Topic", value: appState.ntfyTopicURL.replacingOccurrences(of: "https://ntfy.sh/", with: ""))
+                    }
+                }
+
+                if let msg = testResult {
+                    Section {
                         Text(msg)
                             .font(.caption)
                             .foregroundStyle(.secondary)

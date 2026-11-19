@@ -3,9 +3,11 @@ from pydantic import BaseModel, Field
 
 
 class AssistantIngestRequest(BaseModel):
-    raw_message: str = Field(..., min_length=1, max_length=4000)
+    raw_message: str = Field(default="", max_length=4000)
     source: str = Field(default="manual", max_length=64)
     sender: str = Field(default="Me", max_length=128)
+    image_base64: str = Field(default="")
+    image_mime: str = Field(default="image/jpeg", max_length=64)
 
 
 class AssistantItemUpdate(BaseModel):
@@ -27,6 +29,7 @@ class AssistantItemOut(BaseModel):
     status: str
     routed_to: str
     engine: str
+    attachment_data_url: str = ""
     created_at: datetime
 
 

@@ -62,6 +62,9 @@ def _ensure_sqlite_columns(bind_engine) -> None:
             ("aroma", "VARCHAR(64) NOT NULL DEFAULT ''"),
             ("cooking_method", "VARCHAR(64) NOT NULL DEFAULT ''"),
         ],
+        "assistant_items": [
+            ("attachment_data_url", "TEXT NOT NULL DEFAULT ''"),
+        ],
         "nutrition_targets": [("user_id", "INTEGER NOT NULL DEFAULT 1")],
         "workout_logs": [("user_id", "INTEGER NOT NULL DEFAULT 1")],
         "whitelisted_senders": [("user_id", "INTEGER NOT NULL DEFAULT 1")],

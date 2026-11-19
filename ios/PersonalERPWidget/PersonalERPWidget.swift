@@ -1,5 +1,17 @@
-import WidgetKit
+import AppIntents
 import SwiftUI
+import WidgetKit
+
+struct ERPWidgetConfigIntent: WidgetConfigurationIntent {
+    static var title: LocalizedStringResource = "Wealth Widget Settings"
+    static var description = IntentDescription("Paste your Server URL and Widget Token from the app's Settings tab.")
+
+    @Parameter(title: "Server URL", default: "")
+    var serverURL: String
+
+    @Parameter(title: "Widget Token", default: "")
+    var widgetToken: String
+}
 
 struct ERPEntry: TimelineEntry {
     let date: Date
@@ -7,40 +19,63 @@ struct ERPEntry: TimelineEntry {
     let errorText: String?
 }
 
-struct ERPProvider: TimelineProvider {
+struct ERPProvider: AppIntentTimelineProvider {
     func placeholder(in context: Context) -> ERPEntry {
         ERPEntry(date: Date(), summary: sampleSummary, errorText: nil)
     }
 
-    func getSnapshot(in context: Context, completion: @escaping (ERPEntry) -> Void) {
-        completion(ERPEntry(date: Date(), summary: sampleSummary, errorText: nil))
-    }
-
-    func getTimeline(in context: Context, completion: @escaping (Timeline<ERPEntry>) -> Void) {
-        Task {
-            let nextRefresh = Calendar.current.date(byAdding: .minute, value: 15, to: Date()) ?? Date().addingTimeInterval(900)
-            do {
-                let data = try await fetchWidgetSummary()
-                let entry = ERPEntry(date: Date(), summary: data, errorText: nil)
-                completion(Timeline(entries: [entry], policy: .after(nextRefresh)))
-            } catch {
-                let entry = ERPEntry(date: Date(), summary: nil, errorText: error.localizedDescription)
-                completion(Timeline(entries: [entry], policy: .after(nextRefresh)))
-            }
+    func snapshot(for configuration: ERPWidgetConfigIntent, in context: Context) async -> ERPEntry {
+        if context.isPreview {
+            return ERPEntry(date: Date(), summary: sampleSummary, errorText: nil)
+        }
+        do {
+            let data = try await fetchWidgetSummary(config: configuration)
+            return ERPEntry(date: Date(), summary: data, errorText: nil)
+        } catch {
+            return ERPEntry(date: Date(), summary: nil, errorText: error.localizedDescription)
         }
     }
 
-    private func fetchWidgetSummary() async throws -> WidgetSummary {
-        guard let creds = SharedConfig.loadCredentials(),
+    func timeline(for configuration: ERPWidgetConfigIntent, in context: Context) async -> Timeline<ERPEntry> {
+        let nextRefresh = Calendar.current.date(byAdding: .minute, value: 15, to: Date()) ?? Date().addingTimeInterval(900)
+        do {
+            let data = try await fetchWidgetSummary(config: configuration)
+            let entry = ERPEntry(date: Date(), summary: data, errorText: nil)
+            return Timeline(entries: [entry], policy: .after(nextRefresh))
+        } catch {
+            let entry = ERPEntry(date: Date(), summary: nil, errorText: error.localizedDescription)
+            return Timeline(entries: [entry], policy: .after(nextRefresh))
+        }
+    }
+
+    private func resolveCreds(config: ERPWidgetConfigIntent) -> (baseURL: String, token: String)? {
+        let cfgURL = config.serverURL.trimmingCharacters(in: .whitespacesAndNewlines)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        let cfgTok = config.widgetToken.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !cfgURL.isEmpty && !cfgTok.isEmpty {
+            return (cfgURL, cfgTok)
+        }
+        if let shared = SharedConfig.loadCredentials() {
+            return (shared.baseURL, shared.token)
+        }
+        return nil
+    }
+
+    private func fetchWidgetSummary(config: ERPWidgetConfigIntent) async throws -> WidgetSummary {
+        guard let creds = resolveCreds(config: config),
               let url = URL(string: "\(creds.baseURL)/api/wealth/widget-summary") else {
-            throw NSError(domain: "PersonalERPWidget", code: 1, userInfo: [NSLocalizedDescriptionKey: "Open app & sign in"])
+            throw NSError(
+                domain: "PersonalERPWidget",
+                code: 1,
+                userInfo: [NSLocalizedDescriptionKey: "Hold widget -> Edit Widget -> paste Server URL & Token"]
+            )
         }
         var req = URLRequest(url: url)
         req.timeoutInterval = 10
         req.setValue("Bearer \(creds.token)", forHTTPHeaderField: "Authorization")
         let (data, resp) = try await URLSession.shared.data(for: req)
         guard let http = resp as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
-            throw NSError(domain: "PersonalERPWidget", code: 2, userInfo: [NSLocalizedDescriptionKey: "Server offline"])
+            throw NSError(domain: "PersonalERPWidget", code: 2, userInfo: [NSLocalizedDescriptionKey: "Server offline or bad token"])
         }
         return try JSONDecoder().decode(WidgetSummary.self, from: data)
     }
@@ -142,7 +177,7 @@ struct PersonalERPWidgetEntryView: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text("Personal ERP")
                     .font(.caption.bold())
-                Text(entry.errorText ?? "Sign in inside app")
+                Text(entry.errorText ?? "Hold -> Edit Widget")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
             }
@@ -155,7 +190,7 @@ struct PersonalERPWidget: Widget {
     let kind: String = "PersonalERPWidget"
 
     var body: some WidgetConfiguration {
-        StaticConfiguration(kind: kind, provider: ERPProvider()) { entry in
+        AppIntentConfiguration(kind: kind, intent: ERPWidgetConfigIntent.self, provider: ERPProvider()) { entry in
             PersonalERPWidgetEntryView(entry: entry)
                 .containerBackground(Color(red: 0.067, green: 0.071, blue: 0.086), for: .widget)
         }

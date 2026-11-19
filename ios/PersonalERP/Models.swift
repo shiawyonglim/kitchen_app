@@ -89,3 +89,34 @@ struct NotificationTestResponse: Codable {
     let configured: Bool
     let sent: Bool
 }
+
+struct WidgetConfigResponse: Codable {
+    let widget_api_token: String
+    let ntfy_topic_url: String
+}
+
+struct AssistantItem: Codable, Identifiable {
+    let id: Int
+    let source: String
+    let sender: String
+    let raw_message: String
+    let category: String
+    let title: String
+    let ai_plan: String
+    let scheduled_for: String
+    let priority: String
+    let status: String
+    let routed_to: String
+    let engine: String
+    let created_at: String
+}
+
+struct MorningBriefing: Codable {
+    let date_label: String
+    let greeting: String
+    let pending_tasks: [AssistantItem]
+    let scheduled_items: [AssistantItem]
+    let expiring_kitchen: [String]
+    let ai_focus_plan: String
+    let engine: String
+}

@@ -1,6 +1,7 @@
 """Free LLM planner (Groq primary, local Ollama fallback, deterministic heuristic backup)."""
 from __future__ import annotations
 
+import base64
 import json
 import re
 from datetime import datetime, timedelta
@@ -10,6 +11,64 @@ from app.config import settings
 
 _VALID_CATEGORIES = {"task", "schedule", "idea", "kitchen", "expense"}
 _VALID_PRIORITIES = {"high", "normal", "low"}
+
+
+def _format_plan_text(val) -> str:
+    if isinstance(val, list):
+        return "\n".join(f"• {str(x).strip()}" for x in val if str(x).strip())
+    return str(val or "").strip()
+
+
+def extract_image_context(image_base64: str, image_mime: str = "image/jpeg") -> str:
+    """Read a forwarded image/receipt using Gemini Vision (free tier) or local RapidOCR fallback."""
+    if not image_base64:
+        return ""
+    if settings.gemini_api_key:
+        try:
+            url = (
+                "https://generativelanguage.googleapis.com/v1beta/models/"
+                f"gemini-2.5-flash:generateContent?key={settings.gemini_api_key}"
+            )
+            payload = {
+                "contents": [
+                    {
+                        "parts": [
+                            {
+                                "text": (
+                                    "Extract all key details from this image concisely in plain text: "
+                                    "if it is a receipt, list merchant/type, date, key items, and exact Net Total / Grand Total; "
+                                    "if it is a screenshot/poster/chat, summarize all dates, times, venues, amounts, and names."
+                                )
+                            },
+                            {
+                                "inline_data": {
+                                    "mime_type": image_mime or "image/jpeg",
+                                    "data": image_base64,
+                                }
+                            },
+                        ]
+                    }
+                ]
+            }
+            with httpx.Client(timeout=20.0) as client:
+                resp = client.post(url, json=payload)
+            if resp.status_code == 200:
+                parts = resp.json()["candidates"][0]["content"]["parts"]
+                text = " ".join(p.get("text", "") for p in parts).strip()
+                if text:
+                    return text
+        except Exception:
+            pass
+
+    try:
+        from app.modules.kitchen import ocr
+
+        lines = ocr.extract_receipt_lines(base64.b64decode(image_base64))
+        if lines:
+            return " | ".join(lines[:20])
+    except Exception:
+        pass
+    return "Image attached (could not extract text)."
 
 
 def _extract_json_dict(raw_text: str) -> dict | None:
@@ -204,8 +263,11 @@ def analyze_messages(
         "3. FOLLOW-UP MERGE: Look at 'recent_pending'. If a new message only adds location/court/time details to one of those recent pending items, "
         "set 'merge_into_id' to that item's integer id; otherwise set 'merge_into_id' to null.\n"
         "4. CLARITY: Write a clear, concise English 'title' (e.g. 'Badminton @ Pusat Komuniti Sri Petaling (RM18, 3 Courts)'), "
-        "exact 'scheduled_for' ('YYYY-MM-DD HH:MM' or '' if none), and a practical 'ai_plan' (2-3 crisp bullets with venue, fee, time, and action needed — no generic filler).\n"
-        "5. CATEGORIES: 'schedule' (events/appointments/reminders with a time or venue, even if a fee like RM18 is mentioned), "
+        "exact 'scheduled_for' ('YYYY-MM-DD HH:MM' or '' if none), and a practical 'ai_plan' as a SINGLE string with newline-separated bullets "
+        "(e.g. '• Venue: ...\\n• Time: ...\\n• Action: ...' — never a JSON array, no generic filler).\n"
+        "5. RECEIPTS/IMAGES: If '[Attached Image/Receipt]' is present alongside a message like 'Pay christie', combine them into ONE task "
+        "including the extracted total/merchant in the title and details in ai_plan.\n"
+        "6. CATEGORIES: 'schedule' (events/appointments/reminders with a time or venue, even if a fee like RM18 is mentioned), "
         "'task', 'idea', 'kitchen' (groceries/food), or 'expense' (actual payments/receipts).\n"
         "Return ONLY JSON: {\"plans\": [{\"merge_into_id\": int|null, \"category\": str, \"title\": str, "
         "\"ai_plan\": str, \"scheduled_for\": str, \"priority\": \"high\"|\"normal\"|\"low\", \"kitchen_items\": [str]}]}"
@@ -253,7 +315,7 @@ def analyze_messages(
                 "merge_into_id": merge_id,
                 "category": cat,
                 "title": str(item.get("title") or raw_message.splitlines()[0])[:255].strip(),
-                "ai_plan": str(item.get("ai_plan") or "").strip(),
+                "ai_plan": _format_plan_text(item.get("ai_plan")),
                 "scheduled_for": str(item.get("scheduled_for") or "")[:64].strip(),
                 "priority": prio,
                 "kitchen_items": [str(x).strip() for x in k_items if str(x).strip()][:8],
@@ -274,15 +336,15 @@ def generate_morning_briefing_text(
         f"Pending tasks: {pending_titles[:8] or ['None']}\n"
         f"Expiring kitchen items: {expiring_kitchen or ['None']}"
     )
-    sys_p = "Return ONLY a JSON object with key 'focus_plan' (a crisp 3-bullet morning action plan)."
+    sys_p = "Return ONLY a JSON object with key 'focus_plan' as a SINGLE string with 3 newline-separated bullet points (not an array)."
 
     parsed = _call_groq_json(sys_p, context)
     if parsed and parsed.get("focus_plan"):
-        return str(parsed["focus_plan"]).strip(), "groq"
+        return _format_plan_text(parsed["focus_plan"]), "groq"
 
     parsed = _call_ollama_json(f"{sys_p}\n\n{context}")
     if parsed and parsed.get("focus_plan"):
-        return str(parsed["focus_plan"]).strip(), "ollama_local"
+        return _format_plan_text(parsed["focus_plan"]), "ollama_local"
 
     lines = []
     if scheduled_lines:

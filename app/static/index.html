@@ -1404,6 +1404,38 @@
           <div id="assistant-items-list" class="space-y-2.5 max-h-[460px] overflow-y-auto"></div>
         </div>
       </div>
+
+      <!-- Assistant Item Detail Modal -->
+      <div id="assistant-detail-modal" class="hidden fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4" onclick="if (event.target === this) closeAssistantModal()">
+        <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-2xl w-full max-h-[88vh] overflow-y-auto p-5 space-y-4 shadow-2xl">
+          <div class="flex items-start justify-between gap-3">
+            <div class="space-y-1">
+              <div id="as-modal-badges" class="flex flex-wrap items-center gap-1.5"></div>
+              <h3 id="as-modal-title" class="text-base font-bold text-white"></h3>
+            </div>
+            <button onclick="closeAssistantModal()" class="text-slate-400 hover:text-white text-xl leading-none px-1">&times;</button>
+          </div>
+          <div class="space-y-1">
+            <div class="text-[11px] font-semibold uppercase tracking-wider text-emerald-400">AI Plan &amp; Thinking</div>
+            <pre id="as-modal-plan" class="text-xs text-slate-200 whitespace-pre-wrap font-sans bg-slate-950 border border-slate-800 rounded-xl p-3"></pre>
+          </div>
+          <div id="as-modal-img-wrap" class="hidden space-y-1">
+            <div class="text-[11px] font-semibold uppercase tracking-wider text-sky-400">Attached Receipt / Image</div>
+            <img id="as-modal-img" src="" alt="Attached receipt" class="max-h-96 rounded-xl border border-slate-800 object-contain bg-black" />
+          </div>
+          <div class="space-y-1">
+            <div class="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Original Forwarded Message</div>
+            <pre id="as-modal-raw" class="text-xs text-slate-400 whitespace-pre-wrap font-sans bg-slate-950 border border-slate-800 rounded-xl p-3"></pre>
+          </div>
+          <div class="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-800">
+            <button id="as-modal-reanalyze" onclick="reanalyzeActiveAssistantItem()" class="text-xs px-3 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-white font-semibold">Re-analyze with AI</button>
+            <div class="flex items-center gap-2">
+              <button id="as-modal-toggle" onclick="toggleActiveAssistantDone()" class="text-xs px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold"></button>
+              <button onclick="deleteActiveAssistantItem()" class="text-xs px-3 py-1.5 rounded-lg bg-rose-700/70 hover:bg-rose-600 text-white font-semibold">Delete</button>
+            </div>
+          </div>
+        </div>
+      </div>
     </section>
 
     <section id="panel-resolve" class="hidden space-y-5">
@@ -5155,20 +5187,22 @@
       }
       if (itemsRes.ok) {
         const items = await itemsRes.json();
+        window._assistantItemsCache = items;
         document.getElementById("assistant-items-list").innerHTML = items.length
           ? items.map((it) => `
-            <div class="p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-1.5">
+            <div onclick="openAssistantModal(${it.id})" class="cursor-pointer hover:border-amber-500/40 transition p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-1.5">
               <div class="flex items-start justify-between gap-2">
                 <div>
                   <div class="flex flex-wrap items-center gap-1.5">
                     <span class="text-[10px] uppercase px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-semibold">${_escTaste(it.category)}</span>
                     <span class="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-300">${_escTaste(it.source)} · ${_escTaste(it.sender)}</span>
                     ${it.scheduled_for ? `<span class="text-[10px] px-2 py-0.5 rounded-full bg-sky-500/20 text-sky-300 font-medium">${_escTaste(it.scheduled_for)}</span>` : ""}
+                    ${it.attachment_data_url ? `<span class="text-[10px] px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 font-medium">Receipt / Image</span>` : ""}
                     ${it.routed_to ? `<span class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300">→ ${_escTaste(it.routed_to)}</span>` : ""}
                   </div>
                   <div class="font-semibold text-white text-sm mt-1 ${it.status === "done" ? "line-through text-slate-500" : ""}">${_escTaste(it.title)}</div>
                 </div>
-                <div class="flex items-center gap-1.5 shrink-0">
+                <div class="flex items-center gap-1.5 shrink-0" onclick="event.stopPropagation()">
                   <button onclick="toggleAssistantDone(${it.id}, '${it.status === "done" ? "pending" : "done"}')" class="text-xs px-2 py-1 rounded-lg bg-slate-800 hover:bg-emerald-700 text-emerald-300">${it.status === "done" ? "Reopen" : "Done"}</button>
                   <button onclick="deleteAssistantItem(${it.id})" class="text-xs px-2 py-1 rounded-lg bg-slate-800 hover:bg-rose-800 text-rose-300">&times;</button>
                 </div>
@@ -5177,6 +5211,66 @@
             </div>`).join("")
           : `<div class="text-xs text-slate-500">No items yet. Forward a WhatsApp message or enter one on the left.</div>`;
       }
+    }
+
+    let _activeAssistantItem = null;
+    function openAssistantModal(id) {
+      const it = (window._assistantItemsCache || []).find((x) => x.id === id);
+      if (!it) return;
+      _activeAssistantItem = it;
+      document.getElementById("as-modal-badges").innerHTML = `
+        <span class="text-[10px] uppercase px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-semibold">${_escTaste(it.category)}</span>
+        <span class="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-300">${_escTaste(it.source)} · ${_escTaste(it.sender)}</span>
+        <span class="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-sky-300">${_escTaste(it.engine)}</span>
+        ${it.scheduled_for ? `<span class="text-[10px] px-2 py-0.5 rounded-full bg-sky-500/20 text-sky-300">${_escTaste(it.scheduled_for)}</span>` : ""}
+      `;
+      document.getElementById("as-modal-title").textContent = it.title;
+      document.getElementById("as-modal-plan").textContent = it.ai_plan || "No AI plan generated.";
+      document.getElementById("as-modal-raw").textContent = it.raw_message;
+      const imgWrap = document.getElementById("as-modal-img-wrap");
+      const imgEl = document.getElementById("as-modal-img");
+      if (it.attachment_data_url) {
+        imgEl.src = it.attachment_data_url;
+        imgWrap.classList.remove("hidden");
+      } else {
+        imgEl.src = "";
+        imgWrap.classList.add("hidden");
+      }
+      document.getElementById("as-modal-toggle").textContent = it.status === "done" ? "Reopen Task" : "Mark Done";
+      document.getElementById("assistant-detail-modal").classList.remove("hidden");
+    }
+    function closeAssistantModal() {
+      document.getElementById("assistant-detail-modal").classList.add("hidden");
+      _activeAssistantItem = null;
+    }
+    async function reanalyzeActiveAssistantItem() {
+      if (!_activeAssistantItem) return;
+      const btn = document.getElementById("as-modal-reanalyze");
+      btn.disabled = true;
+      btn.textContent = "Re-analyzing...";
+      try {
+        const res = await fetch(`/api/assistant/items/${_activeAssistantItem.id}/reanalyze`, { method: "POST" });
+        if (res.ok) {
+          const updated = await res.json();
+          await loadAssistant();
+          openAssistantModal(updated.id);
+          showToast("Re-analyzed with AI.", "ok");
+        }
+      } finally {
+        btn.disabled = false;
+        btn.textContent = "Re-analyze with AI";
+      }
+    }
+    async function toggleActiveAssistantDone() {
+      if (!_activeAssistantItem) return;
+      const next = _activeAssistantItem.status === "done" ? "pending" : "done";
+      await toggleAssistantDone(_activeAssistantItem.id, next);
+      closeAssistantModal();
+    }
+    async function deleteActiveAssistantItem() {
+      if (!_activeAssistantItem) return;
+      await deleteAssistantItem(_activeAssistantItem.id);
+      closeAssistantModal();
     }
 
     async function ingestAssistantManual(e) {
@@ -5278,6 +5372,13 @@
     refreshIcons();
     refreshAll();
     connectWealthStream();
+  </script>
+  <script type="module">
+    if (location.hostname === "127.0.0.1" || location.hostname === "localhost") {
+      import("https://cdn.jsdelivr.net/npm/@reticlehq/browser@3.3.0/+esm")
+        .then(({ reticle }) => reticle.connect({ projectId: "kitchen-app", token: "16e228bb2e2bba899b685f365511bc8726ed862206294b7f" }))
+        .catch(() => {});
+    }
   </script>
 </body>
 </html>

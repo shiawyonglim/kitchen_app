@@ -14,6 +14,10 @@ final class AppState: ObservableObject {
     @Published var widgetSummary: WidgetSummary?
     @Published var entries: [LedgerEntry] = []
     @Published var categories: [String] = []
+    @Published var assistantItems: [AssistantItem] = []
+    @Published var morningBriefing: MorningBriefing?
+    @Published var widgetToken: String = ""
+    @Published var ntfyTopicURL: String = ""
     @Published var isLoading = false
     @Published var errorMessage: String?
     @Published var statusMessage: String?
@@ -50,6 +54,11 @@ final class AppState: ObservableObject {
             entries = ent
             categories = cats.map(\.name)
             WidgetCenter.shared.reloadAllTimelines()
+            if let cfg = try? await APIClient.shared.fetchWidgetConfig() {
+                widgetToken = cfg.widget_api_token
+                ntfyTopicURL = cfg.ntfy_topic_url
+            }
+            await loadAssistant()
         } catch APIError.notAuthenticated {
             SharedConfig.clearSession()
             isAuthenticated = false
@@ -111,6 +120,48 @@ final class AppState: ObservableObject {
         }
     }
 
+    func loadAssistant() async {
+        guard isAuthenticated else { return }
+        do {
+            async let b = APIClient.shared.fetchMorningBriefing()
+            async let items = APIClient.shared.fetchAssistantItems()
+            let (brief, list) = try await (b, items)
+            morningBriefing = brief
+            assistantItems = list
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func sendAssistantMessage(_ message: String) async -> Bool {
+        do {
+            _ = try await APIClient.shared.ingestAssistantMessage(message)
+            await loadAssistant()
+            return true
+        } catch {
+            errorMessage = error.localizedDescription
+            return false
+        }
+    }
+
+    func setAssistantStatus(id: Int, status: String) async {
+        do {
+            _ = try await APIClient.shared.updateAssistantItem(id: id, status: status)
+            await loadAssistant()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func deleteAssistantItem(id: Int) async {
+        do {
+            try await APIClient.shared.deleteAssistantItem(id: id)
+            await loadAssistant()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
     func signOut() async {
         await APIClient.shared.logout()
         isAuthenticated = false
@@ -152,6 +203,9 @@ struct MainTabView: View {
 
             TransactionsView()
                 .tabItem { Label("Transactions", systemImage: "list.bullet.rectangle") }
+
+            AssistantView()
+                .tabItem { Label("Assistant", systemImage: "sparkles") }
 
             SettingsView()
                 .tabItem { Label("Settings", systemImage: "gearshape.fill") }

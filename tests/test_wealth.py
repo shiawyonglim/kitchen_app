@@ -1576,7 +1576,7 @@ def test_widget_summary_requires_token_and_returns_compact_payload(monkeypatch):
     )
     Base.metadata.create_all(bind=eng)
     db = sessionmaker(autocommit=False, autoflush=False, bind=eng)()
-    today_dt = datetime.now(timezone.utc)
+    today_dt = datetime.now()
     db.add(
         LedgerEntry(
             idempotency_hash="widget-exp-1",

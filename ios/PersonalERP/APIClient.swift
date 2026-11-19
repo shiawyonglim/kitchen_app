@@ -124,6 +124,43 @@ final class APIClient {
         return try await perform(req, as: NotificationTestResponse.self)
     }
 
+    func fetchWidgetConfig() async throws -> WidgetConfigResponse {
+        let req = try makeRequest(path: "/api/wealth/widget-config")
+        return try await perform(req, as: WidgetConfigResponse.self)
+    }
+
+    func fetchMorningBriefing() async throws -> MorningBriefing {
+        let req = try makeRequest(path: "/api/assistant/morning-briefing")
+        return try await perform(req, as: MorningBriefing.self)
+    }
+
+    func fetchAssistantItems(status: String? = nil) async throws -> [AssistantItem] {
+        let suffix = status.map { "?status=\($0)" } ?? ""
+        let req = try makeRequest(path: "/api/assistant/items\(suffix)")
+        return try await perform(req, as: [AssistantItem].self)
+    }
+
+    func ingestAssistantMessage(_ message: String) async throws -> [AssistantItem] {
+        let payload = ["raw_message": message, "source": "ios", "sender": "iPhone"]
+        let body = try encoder.encode(payload)
+        let req = try makeRequest(path: "/api/assistant/ingest", method: "POST", body: body)
+        return try await perform(req, as: [AssistantItem].self)
+    }
+
+    func updateAssistantItem(id: Int, status: String) async throws -> AssistantItem {
+        let body = try encoder.encode(["status": status])
+        let req = try makeRequest(path: "/api/assistant/items/\(id)", method: "PATCH", body: body)
+        return try await perform(req, as: AssistantItem.self)
+    }
+
+    func deleteAssistantItem(id: Int) async throws {
+        let req = try makeRequest(path: "/api/assistant/items/\(id)", method: "DELETE")
+        let (_, resp) = try await URLSession.shared.data(for: req)
+        guard let http = resp as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+            throw APIError.server(0, "Delete failed")
+        }
+    }
+
     func logout() async {
         if let req = try? makeRequest(path: "/api/auth/logout", method: "POST") {
             _ = try? await URLSession.shared.data(for: req)

@@ -34,6 +34,14 @@ def update_assistant_item(item_id: int, req: AssistantItemUpdate, db: Session = 
     return updated
 
 
+@router.post("/items/{item_id}/reanalyze", response_model=AssistantItemOut)
+def reanalyze_assistant_item(item_id: int, db: Session = Depends(get_db)):
+    updated = service.reanalyze_item(db, item_id)
+    if not updated:
+        raise HTTPException(status_code=404, detail="Assistant item not found")
+    return updated
+
+
 @router.delete("/items/{item_id}")
 def delete_assistant_item(item_id: int, db: Session = Depends(get_db)):
     if not service.delete_item(db, item_id):

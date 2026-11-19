@@ -30,11 +30,23 @@ def _to_out(row: AssistantItem) -> AssistantItemOut:
         status=row.status,
         routed_to=row.routed_to,
         engine=row.engine,
+        attachment_data_url=row.attachment_data_url,
         created_at=row.created_at,
     )
 
 
 def ingest_message(db: Session, req: AssistantIngestRequest) -> list[AssistantItemOut]:
+    raw_text = req.raw_message.strip()
+    attachment_data_url = ""
+    if req.image_base64:
+        mime = req.image_mime or "image/jpeg"
+        attachment_data_url = f"data:{mime};base64,{req.image_base64}"
+        img_ctx = ai_planner.extract_image_context(req.image_base64, mime)
+        if img_ctx:
+            raw_text = f"{raw_text}\n[Attached Image/Receipt]: {img_ctx}".strip()
+    if not raw_text:
+        raw_text = "Forwarded image/receipt"
+
     recent_rows = list(
         db.scalars(
             select(AssistantItem)
@@ -47,7 +59,7 @@ def ingest_message(db: Session, req: AssistantIngestRequest) -> list[AssistantIt
         {"id": r.id, "category": r.category, "title": r.title, "scheduled_for": r.scheduled_for}
         for r in recent_rows
     ]
-    plans = ai_planner.analyze_messages(req.raw_message, sender=req.sender, recent_pending=recent_ctx)
+    plans = ai_planner.analyze_messages(raw_text, sender=req.sender, recent_pending=recent_ctx)
     created_or_updated: list[AssistantItem] = []
 
     for parsed in plans:
@@ -63,7 +75,7 @@ def ingest_message(db: Session, req: AssistantIngestRequest) -> list[AssistantIt
         merge_id = parsed.get("merge_into_id")
         existing = db.get(AssistantItem, merge_id) if merge_id else None
         if existing and existing.status == "pending":
-            existing.raw_message = f"{existing.raw_message}\n---\n{req.raw_message.strip()}"
+            existing.raw_message = f"{existing.raw_message}\n---\n{raw_text}"
             existing.category = parsed["category"]
             existing.title = parsed["title"]
             existing.ai_plan = parsed["ai_plan"]
@@ -72,13 +84,15 @@ def ingest_message(db: Session, req: AssistantIngestRequest) -> list[AssistantIt
             existing.priority = parsed["priority"]
             if routed_to:
                 existing.routed_to = routed_to
+            if attachment_data_url:
+                existing.attachment_data_url = attachment_data_url
             existing.engine = parsed["engine"]
             created_or_updated.append(existing)
         else:
             row = AssistantItem(
                 source=req.source.strip() or "manual",
                 sender=req.sender.strip() or "Me",
-                raw_message=req.raw_message.strip(),
+                raw_message=raw_text,
                 category=parsed["category"],
                 title=parsed["title"],
                 ai_plan=parsed["ai_plan"],
@@ -87,6 +101,7 @@ def ingest_message(db: Session, req: AssistantIngestRequest) -> list[AssistantIt
                 status="pending",
                 routed_to=routed_to,
                 engine=parsed["engine"],
+                attachment_data_url=attachment_data_url,
             )
             db.add(row)
             created_or_updated.append(row)
@@ -95,6 +110,24 @@ def ingest_message(db: Session, req: AssistantIngestRequest) -> list[AssistantIt
     for row in created_or_updated:
         db.refresh(row)
     return [_to_out(row) for row in created_or_updated]
+
+
+def reanalyze_item(db: Session, item_id: int) -> AssistantItemOut | None:
+    row = db.get(AssistantItem, item_id)
+    if not row:
+        return None
+    plans = ai_planner.analyze_messages(row.raw_message, sender=row.sender, recent_pending=[])
+    if plans:
+        parsed = plans[0]
+        row.category = parsed["category"]
+        row.title = parsed["title"]
+        row.ai_plan = parsed["ai_plan"]
+        row.scheduled_for = parsed["scheduled_for"]
+        row.priority = parsed["priority"]
+        row.engine = parsed["engine"]
+        db.commit()
+        db.refresh(row)
+    return _to_out(row)
 
 
 def list_items(db: Session, status: str | None = None) -> list[AssistantItemOut]:

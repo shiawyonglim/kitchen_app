@@ -428,3 +428,31 @@ def test_assistant_ingest_routing_and_morning_briefing(monkeypatch):
     assert len(briefing.scheduled_items) == 2
     assert briefing.ai_focus_plan != ""
 
+    # Image attachment ingestion + re-analyze
+    import base64
+    import io
+    from PIL import Image, ImageDraw
+
+    monkeypatch.setattr(app_settings, "gemini_api_key", "")
+    img = Image.new("RGB", (320, 120), color="white")
+    draw = ImageDraw.Draw(img)
+    draw.text((20, 40), "NET TOTAL RM 185.85", fill="black")
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    b64 = base64.b64encode(buf.getvalue()).decode("ascii")
+
+    img_item = assistant_service.ingest_message(
+        db,
+        AssistantIngestRequest(
+            raw_message="Pay christie",
+            source="whatsapp",
+            sender="Me",
+            image_base64=b64,
+            image_mime="image/png",
+        ),
+    )[0]
+    assert img_item.attachment_data_url.startswith("data:image/png;base64,")
+    assert "[Attached Image/Receipt]:" in img_item.raw_message
+    reanalyzed = assistant_service.reanalyze_item(db, img_item.id)
+    assert reanalyzed is not None and reanalyzed.id == img_item.id
+
