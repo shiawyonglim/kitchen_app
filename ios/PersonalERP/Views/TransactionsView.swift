@@ -72,7 +72,7 @@ struct TransactionsView: View {
                             Spacer()
                             VStack(alignment: .trailing, spacing: 2) {
                                 Text(amountLabel(for: entry))
-                                    .font(.subheadline.semibold().monospacedDigit())
+                                    .font(.subheadline.weight(.semibold).monospacedDigit())
                                     .foregroundStyle(amountColor(for: entry))
                                 if entry.is_self_transfer {
                                     Text("Self")

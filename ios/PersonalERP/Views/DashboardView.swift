@@ -38,7 +38,7 @@ struct DashboardView: View {
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                                 Text(formatRM(abs(wid.budget_remaining_myr)))
-                                    .font(.title3.semibold().monospacedDigit())
+                                    .font(.title3.weight(.semibold).monospacedDigit())
                                     .foregroundStyle(wid.budget_remaining_myr >= 0 ? .green : .red)
                             }
                         }
