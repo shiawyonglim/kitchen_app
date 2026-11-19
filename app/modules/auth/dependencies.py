@@ -36,6 +36,14 @@ def read_session_cookie(request: Request) -> str | None:
     return request.cookies.get(SESSION_COOKIE_SECURE) or request.cookies.get(SESSION_COOKIE_DEV)
 
 
+def read_bearer_token(request: Request) -> str | None:
+    auth = request.headers.get("authorization", "")
+    if auth.lower().startswith("bearer "):
+        tok = auth[7:].strip()
+        return tok or None
+    return None
+
+
 def set_auth_cookies(
     response: Response,
     request: Request,
@@ -86,14 +94,15 @@ def clear_auth_cookies(response: Response, request: Request) -> None:
 def get_optional_session(
     request: Request, db: Session = Depends(get_db)
 ) -> UserSession | None:
-    raw_token = read_session_cookie(request)
+    raw_token = read_bearer_token(request) or read_session_cookie(request)
     return auth_service.get_valid_session(db, raw_token)
 
 
 def require_auth(
     request: Request, db: Session = Depends(get_db)
 ) -> UserSession:
-    raw_token = read_session_cookie(request)
+    bearer_token = read_bearer_token(request)
+    raw_token = bearer_token or read_session_cookie(request)
     session = auth_service.get_valid_session(db, raw_token)
     if session is None:
         raise HTTPException(
@@ -101,7 +110,7 @@ def require_auth(
             detail="Authentication required.",
         )
 
-    if request.method.upper() not in _SAFE_METHODS:
+    if bearer_token is None and request.method.upper() not in _SAFE_METHODS:
         header_csrf = request.headers.get("x-csrf-token", "")
         if not header_csrf or not hmac.compare_digest(header_csrf, session.csrf_token):
             auth_service.log_audit(

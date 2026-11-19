@@ -225,3 +225,8 @@ __marimo__/
 *.db-wal
 bank statement example/
 .agents/
+
+# WhatsApp Bridge local session & dependencies
+scripts/whatsapp_bridge/node_modules/
+scripts/whatsapp_bridge/auth_info/
+scripts/whatsapp_bridge/bridge_status.json

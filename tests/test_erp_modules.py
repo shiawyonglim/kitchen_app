@@ -3,6 +3,8 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.database import Base
+from app.modules.assistant import service as assistant_service
+from app.modules.assistant.schemas import AssistantIngestRequest
 from app.modules.friction import service as friction_service
 from app.modules.friction.schemas import LogOdometerRequest
 from app.modules.kitchen import service as kitchen_service
@@ -255,6 +257,23 @@ def test_fastapi_endpoints_smoke(monkeypatch, tmp_path):
             )
             assert fb_resp.status_code == 200
             assert fb_resp.json()["palate"]["feedback_count"] == 1
+
+            # Assistant authenticated endpoints + WhatsApp bridge token check
+            assert client.get("/api/assistant/items").status_code == 200
+            assert client.get("/api/assistant/morning-briefing").status_code == 200
+            assert client.get("/api/assistant/whatsapp-status").status_code == 200
+            assert client.post(
+                "/api/assistant/whatsapp-ingest",
+                json={"raw_message": "Meet Jason tomorrow 7pm", "source": "whatsapp"},
+            ).status_code == 401
+            monkeypatch.setattr(app_settings, "whatsapp_bridge_token", "test-bridge-secret")
+            wa_ok = client.post(
+                "/api/assistant/whatsapp-ingest",
+                json={"raw_message": "Meet Jason tomorrow 7pm", "source": "whatsapp", "sender": "Me"},
+                headers={"X-Bridge-Token": "test-bridge-secret"},
+            )
+            assert wa_ok.status_code == 200
+            assert wa_ok.json()[0]["category"] == "schedule"
     finally:
         app_main.app.dependency_overrides.clear()
         test_engine.dispose()
@@ -370,4 +389,42 @@ def test_kitchen_auto_profile_cooked_deduct_staples_and_shopping_list():
     toggled = kitchen_service.toggle_shopping_item(db, sl_item.id)
     assert toggled is not None and toggled.is_checked is True
     assert kitchen_service.delete_shopping_item(db, sl_item.id) is True
+
+
+def test_assistant_ingest_routing_and_morning_briefing(monkeypatch):
+    from app.config import settings as app_settings
+    monkeypatch.setattr(app_settings, "groq_api_key", "")
+    db = _make_session()
+    sched = assistant_service.ingest_message(
+        db,
+        AssistantIngestRequest(raw_message="Dinner with Alex tomorrow 8pm", source="whatsapp", sender="Me"),
+    )[0]
+    assert sched.category == "schedule"
+    assert "20:00" in sched.scheduled_for
+    assert sched.ai_plan != ""
+
+    groc = assistant_service.ingest_message(
+        db,
+        AssistantIngestRequest(raw_message="Buy tomato and chicken breast", source="whatsapp", sender="Me"),
+    )[0]
+    assert groc.category == "kitchen"
+    assert groc.routed_to == "kitchen_shopping"
+    sl_names = [s.name.lower() for s in kitchen_service.list_shopping_items(db)]
+    assert any("tomato" in n for n in sl_names)
+
+    badminton = assistant_service.ingest_message(
+        db,
+        AssistantIngestRequest(
+            raw_message="Pusat Komuniti SRI PETALING\nRM18\n21 / 11 / 26 Saturday\n8pm - 10pm",
+            source="whatsapp",
+            sender="Raphael",
+        ),
+    )[0]
+    assert badminton.category == "schedule"
+    assert badminton.scheduled_for == "2026-11-21 20:00"
+
+    briefing = assistant_service.get_morning_briefing(db)
+    assert len(briefing.pending_tasks) == 3
+    assert len(briefing.scheduled_items) == 2
+    assert briefing.ai_focus_plan != ""
 

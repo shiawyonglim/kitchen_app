@@ -15,6 +15,9 @@ from app.database import Base, SessionLocal, engine, get_db, reset_current_user_
 from app.modules.assets import models as _asset_models  # noqa: F401
 from app.modules.assets import service as asset_service
 from app.modules.assets.router import router as assets_router
+from app.modules.assistant import models as _assistant_models  # noqa: F401
+from app.modules.assistant.router import bridge_router as assistant_bridge_router
+from app.modules.assistant.router import router as assistant_router
 from app.modules.auth import models as _auth_models  # noqa: F401
 from app.modules.auth.dependencies import (
     PREAUTH_CSRF_COOKIE_NAME,
@@ -37,7 +40,7 @@ from app.modules.trainer import models as _trainer_models  # noqa: F401
 from app.modules.trainer.router import router as trainer_router
 from app.modules.wealth import models as _wealth_models  # noqa: F401
 from app.modules.wealth import service as wealth_service
-from app.modules.wealth.router import router as wealth_router
+from app.modules.wealth.router import router as wealth_router, widget_router as wealth_widget_router
 
 
 def _ensure_sqlite_columns(bind_engine) -> None:
@@ -201,9 +204,12 @@ async def lifespan(_app: FastAPI):
     task = asyncio.create_task(_daily_wealth_sync_loop())
     from app.modules.wealth.listener import wealth_listener
     listener_task = asyncio.create_task(wealth_listener.run_loop())
+    from app.modules.assistant import bridge_manager
+    bridge_manager.start_bridge()
     try:
         yield
     finally:
+        bridge_manager.stop_bridge()
         task.cancel()
         listener_task.cancel()
 
@@ -287,7 +293,10 @@ async def security_hardening_middleware(request: Request, call_next):
 
 
 app.include_router(auth_router)
+app.include_router(assistant_router, dependencies=[Depends(require_auth)])
+app.include_router(assistant_bridge_router)
 app.include_router(wealth_router, dependencies=[Depends(require_auth)])
+app.include_router(wealth_widget_router)
 app.include_router(assets_router, dependencies=[Depends(require_auth)])
 app.include_router(kitchen_router, dependencies=[Depends(require_auth)])
 app.include_router(trainer_router, dependencies=[Depends(require_auth)])

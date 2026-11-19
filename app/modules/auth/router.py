@@ -347,6 +347,42 @@ def login(
     return UserOut.model_validate(user)
 
 
+@router.post("/mobile-login")
+def mobile_login(
+    payload: LoginRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Issue a Bearer session token for the native iOS app (no browser cookies or CSRF needed)."""
+    _enforce_rate_limit("login", request)
+
+    ip = get_client_ip(request)
+    ua = get_user_agent(request)
+    user = auth_service.authenticate_user(
+        db,
+        email=payload.email,
+        password=payload.password,
+        ip_address=ip,
+        user_agent=ua,
+    )
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid email or password.",
+        )
+
+    _seed_user_defaults(db, user.id)
+    sess, raw_token, _ = auth_service.create_session(
+        db, user=user, remember_me=True, ip_address=ip, user_agent=ua
+    )
+    return {
+        "access_token": raw_token,
+        "token_type": "bearer",
+        "expires_at": sess.expires_at.isoformat(),
+        "user": UserOut.model_validate(user),
+    }
+
+
 @router.post("/logout")
 def logout(
     request: Request,

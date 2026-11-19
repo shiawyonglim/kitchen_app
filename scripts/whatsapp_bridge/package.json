@@ -1,0 +1,15 @@
+{
+  "name": "kitchen-app-whatsapp-bridge",
+  "version": "1.0.0",
+  "description": "Silent local WhatsApp Web listener (Baileys) for kitchen_app Personal Assistant",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@whiskeysockets/baileys": "^6.7.9",
+    "pino": "^9.5.0",
+    "qrcode": "^1.5.4",
+    "qrcode-terminal": "^0.12.0"
+  }
+}

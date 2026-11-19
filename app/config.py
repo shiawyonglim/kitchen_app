@@ -27,6 +27,18 @@ class Settings(BaseSettings):
     google_client_secret: str = ""
     google_redirect_uri: str = ""
 
+    # Personal Assistant AI & WhatsApp Bridge
+    gemini_api_key: str = ""
+    groq_api_key: str = ""
+    groq_model: str = "qwen/qwen3.8-27b"
+    whatsapp_bridge_token: str = ""
+    whatsapp_bridge_user_id: int = 1
+
+    # Mobile Widget (Scriptable) & Push Notifications (ntfy)
+    widget_api_token: str = ""
+    widget_user_id: int = 1
+    ntfy_topic_url: str = ""
+
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
 

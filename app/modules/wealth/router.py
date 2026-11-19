@@ -1,10 +1,12 @@
 import asyncio
-from datetime import date
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+import hmac
+from datetime import date, datetime, timezone
+from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, UploadFile
 from fastapi.responses import RedirectResponse, StreamingResponse
 from sqlalchemy.orm import Session
 
-from app.database import get_db
+from app.config import settings
+from app.database import get_db, reset_current_user_id, set_current_user_id
 from app.modules.wealth import service
 from app.modules.wealth.statement_parser import PdfLockedError
 from app.modules.wealth.schemas import (
@@ -32,6 +34,7 @@ from app.modules.wealth.schemas import (
 )
 
 router = APIRouter(prefix="/api/wealth", tags=["Wealth Ledger"])
+widget_router = APIRouter(prefix="/api/wealth", tags=["Mobile Widget"])
 
 
 @router.post("/discover-senders", response_model=list[DiscoveredSender])
@@ -371,4 +374,98 @@ def apply_category_model_endpoint(db: Session = Depends(get_db)):
         "model": category_model.summarize_model_state(category_model.get_model_state(db)),
         "suggestions": category_model.preview_suggestions(db),
     }
+
+
+@router.post("/notifications/test")
+def test_ntfy_notification():
+    from app.modules.wealth.notifications import send_ntfy_notification
+
+    configured = bool((settings.ntfy_topic_url or "").strip())
+    sent = send_ntfy_notification(
+        "Personal ERP Test",
+        "Push notifications are connected to your iPhone!",
+        tags="white_check_mark",
+    )
+    return {"configured": configured, "sent": sent}
+
+
+@widget_router.get("/widget-summary")
+def get_widget_summary(
+    authorization: str = Header(default=""),
+    x_widget_token: str = Header(default=""),
+    db: Session = Depends(get_db),
+):
+    """Lightweight JSON summary for iPhone widgets, authenticated via Bearer session token or WIDGET_API_TOKEN."""
+    from app.modules.auth import service as auth_service
+    from app.modules.settings import service as settings_service
+
+    expected = (settings.widget_api_token or "").strip()
+    bearer = authorization[7:].strip() if authorization.lower().startswith("bearer ") else ""
+    provided = bearer or x_widget_token.strip()
+
+    user_id: int | None = None
+    if expected and provided and hmac.compare_digest(provided, expected):
+        user_id = settings.widget_user_id
+    elif bearer:
+        sess = auth_service.get_valid_session(db, bearer)
+        if sess is not None:
+            user_id = sess.user_id
+
+    if user_id is None:
+        raise HTTPException(status_code=401, detail="Invalid or unconfigured widget API token")
+
+    tok = set_current_user_id(user_id)
+    db.info["user_id"] = user_id
+    try:
+        today = date.today()
+        month_str = today.strftime("%Y-%m")
+        today_str = today.isoformat()
+        summary = service.get_summary(db, month=month_str)
+        app_cfg = settings_service.get_settings(db)
+        budget = round(float(app_cfg.monthly_budget_myr or 0.0), 2)
+
+        today_pt = next((p for p in summary.daily_series if p.date == today_str), None)
+        today_expense = round(today_pt.expense_myr, 2) if today_pt else 0.0
+        today_income = round(today_pt.income_myr, 2) if today_pt else 0.0
+        month_expense = round(summary.total_expense_myr, 2)
+        month_income = round(summary.total_income_myr, 2)
+        remaining = round(budget - month_expense, 2) if budget > 0 else 0.0
+        used_pct = round((month_expense / budget) * 100.0, 1) if budget > 0 else 0.0
+
+        entries = service.list_entries(db, month=month_str)
+        recent = [
+            {
+                "merchant": e.display_merchant or e.merchant,
+                "category": e.category,
+                "tx_type": e.tx_type,
+                "amount_myr": round(float(e.net_amount_myr if e.net_amount_myr is not None else e.amount_myr), 2),
+                "account_name": e.account_name,
+                "occurred_at": e.occurred_at.isoformat(),
+            }
+            for e in entries
+            if not e.is_self_transfer
+        ][:5]
+
+        return {
+            "month": month_str,
+            "today": today_str,
+            "today_expense_myr": today_expense,
+            "today_income_myr": today_income,
+            "month_expense_myr": month_expense,
+            "month_income_myr": month_income,
+            "monthly_budget_myr": budget,
+            "budget_remaining_myr": remaining,
+            "budget_used_pct": used_pct,
+            "daily_burn_myr": round(summary.rolling_30d_daily_burn_myr, 2),
+            "burn_pace_ratio": summary.burn_pace_ratio,
+            "remaining_fixed_bills_myr": round(summary.remaining_fixed_bills_myr, 2),
+            "accounts": [
+                {"name": a.name, "balance_myr": round(a.current_balance_myr, 2)}
+                for a in summary.account_balances[:4]
+            ],
+            "recent": recent,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }
+    finally:
+        reset_current_user_id(tok)
 

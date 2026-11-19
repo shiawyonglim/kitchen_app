@@ -1559,6 +1559,185 @@ def test_category_model_uses_amount_and_monthly_cadence_for_same_merchant():
     assert pred_small == "Food & Beverage"
 
 
+def test_widget_summary_requires_token_and_returns_compact_payload(monkeypatch):
+    from fastapi.testclient import TestClient
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+    from sqlalchemy.pool import StaticPool
+    from app.config import settings
+    from app.database import Base, get_db
+    from app.main import app
+    from app.modules.wealth.models import LedgerEntry
+
+    eng = create_engine(
+        "sqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    Base.metadata.create_all(bind=eng)
+    db = sessionmaker(autocommit=False, autoflush=False, bind=eng)()
+    today_dt = datetime.now(timezone.utc)
+    db.add(
+        LedgerEntry(
+            idempotency_hash="widget-exp-1",
+            sender_email="alerts@rytbank.my",
+            merchant="MIXUE SRI PETALING",
+            category="Food & Beverage",
+            tx_type="expense",
+            amount_myr=12.50,
+            occurred_at=today_dt,
+            subject="Card payment",
+            account_name="Ryt Bank",
+        )
+    )
+    db.commit()
+
+    monkeypatch.setattr(settings, "widget_api_token", "secret-widget-token-123")
+    monkeypatch.setattr(settings, "widget_user_id", 1)
+
+    def _override_db():
+        try:
+            yield db
+        finally:
+            pass
+
+    app.dependency_overrides[get_db] = _override_db
+    try:
+        client = TestClient(app)
+        assert client.get("/api/wealth/widget-summary").status_code == 401
+        assert client.get("/api/wealth/widget-summary", headers={"Authorization": "Bearer wrong"}).status_code == 401
+
+        res = client.get("/api/wealth/widget-summary", headers={"Authorization": "Bearer secret-widget-token-123"})
+        assert res.status_code == 200
+        body = res.json()
+        assert body["today_expense_myr"] == 12.5
+        assert body["month_expense_myr"] == 12.5
+        assert body["monthly_budget_myr"] == 3000.0
+        assert body["budget_remaining_myr"] == 2987.5
+        assert len(body["recent"]) == 1
+        assert body["recent"][0]["merchant"] == "MIXUE SRI PETALING"
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_notify_new_transactions_posts_to_ntfy(monkeypatch):
+    import urllib.request
+    from app.config import settings
+    from app.modules.wealth import notifications
+    from app.modules.wealth.models import LedgerEntry
+
+    captured = {}
+
+    class _FakeResp:
+        status = 200
+        def __enter__(self):
+            return self
+        def __exit__(self, *args):
+            return False
+
+    def _fake_urlopen(req, timeout=5):
+        captured["url"] = req.full_url
+        captured["body"] = req.data.decode("utf-8")
+        captured["title"] = req.get_header("Title")
+        return _FakeResp()
+
+    monkeypatch.setattr(settings, "ntfy_topic_url", "https://ntfy.sh/test-personal-erp-topic")
+    monkeypatch.setattr(urllib.request, "urlopen", _fake_urlopen)
+
+    entries = [
+        LedgerEntry(
+            idempotency_hash="n-self",
+            sender_email="alerts@rytbank.my",
+            merchant="LIM SHIAW YONG",
+            category="Bank / Retail",
+            tx_type="expense",
+            amount_myr=500.0,
+            occurred_at=datetime.now(timezone.utc),
+            account_name="Ryt Bank",
+            is_self_transfer=True,
+        ),
+        LedgerEntry(
+            idempotency_hash="n-real",
+            sender_email="alerts@rytbank.my",
+            merchant="MIXUE",
+            category="Food & Beverage",
+            tx_type="expense",
+            amount_myr=15.5,
+            occurred_at=datetime.now(timezone.utc),
+            account_name="Ryt Bank",
+            is_self_transfer=False,
+        ),
+    ]
+    count = notifications.notify_new_transactions(entries)
+    assert count == 1
+    assert captured["url"] == "https://ntfy.sh/test-personal-erp-topic"
+    assert captured["title"] == "New Expense"
+    assert "-RM 15.50 · MIXUE (Food & Beverage) [Ryt Bank]" in captured["body"]
+
+
+def test_mobile_login_bearer_auth_works_without_csrf():
+    from fastapi.testclient import TestClient
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+    from sqlalchemy.pool import StaticPool
+    from app.database import Base, get_db
+    from app.main import app
+    from app.modules.auth import service as auth_service
+
+    eng = create_engine(
+        "sqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    Base.metadata.create_all(bind=eng)
+    db = sessionmaker(autocommit=False, autoflush=False, bind=eng)()
+    auth_service.create_user(
+        db,
+        email="iphone@example.com",
+        password="StrongPassword123!",
+        full_name="iPhone User",
+    )
+
+    def _override_db():
+        try:
+            yield db
+        finally:
+            pass
+
+    app.dependency_overrides[get_db] = _override_db
+    try:
+        client = TestClient(app)
+        login_res = client.post(
+            "/api/auth/mobile-login",
+            json={"email": "iphone@example.com", "password": "StrongPassword123!"},
+        )
+        assert login_res.status_code == 200
+        token = login_res.json()["access_token"]
+        assert token
+
+        # Bearer token works on both GET and POST without CSRF cookies
+        wid_res = client.get("/api/wealth/widget-summary", headers={"Authorization": f"Bearer {token}"})
+        assert wid_res.status_code == 200
+        post_res = client.post(
+            "/api/wealth/entries/manual",
+            headers={"Authorization": f"Bearer {token}"},
+            json={
+                "merchant": "Coffee Shop",
+                "category": "Food & Beverage",
+                "tx_type": "expense",
+                "amount_myr": 9.90,
+                "occurred_at": "2026-11-19T10:00:00Z",
+                "account_name": "Ryt Bank",
+            },
+        )
+        assert post_res.status_code == 200
+        assert post_res.json()["merchant"] == "Coffee Shop"
+    finally:
+        app.dependency_overrides.clear()
+
+
+
+
 
 
 

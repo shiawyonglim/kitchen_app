@@ -10,6 +10,9 @@ import app.database as app_db
 from app.config import settings
 from app.modules.settings import service as settings_service
 from app.modules.wealth.email_client import ImapEmailProvider
+from app.modules.wealth.models import LedgerEntry
+from app.modules.wealth.notifications import notify_new_transactions
+from sqlalchemy import func, select
 
 
 class WealthLiveListener:
@@ -54,9 +57,21 @@ class WealthLiveListener:
 
     def _run_sync_now(self) -> None:
         self.status = "syncing"
+        new_entries: list[LedgerEntry] = []
         with app_db.SessionLocal() as db:
+            prev_max_id = db.scalar(select(func.max(LedgerEntry.id))) or 0
             res_settings = settings_service.run_daily_auto_sync(db)
             status_text = res_settings.last_auto_sync_status or ""
+            if settings.ntfy_topic_url:
+                new_entries = list(
+                    db.scalars(
+                        select(LedgerEntry)
+                        .where(LedgerEntry.id > prev_max_id)
+                        .order_by(LedgerEntry.id.asc())
+                    ).all()
+                )
+        if new_entries:
+            notify_new_transactions(new_entries)
         self.last_event_at = datetime.now(timezone.utc).isoformat()
         self.last_error = None
         self.total_events_synced += 1
