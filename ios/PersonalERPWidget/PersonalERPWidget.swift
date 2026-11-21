@@ -77,6 +77,11 @@ struct ERPProvider: TimelineProvider {
             remaining_fixed_bills_myr: 250.0,
             accounts: [],
             recent: [],
+            assistant_pending_count: 2,
+            assistant_tasks: [
+                WidgetAssistantTask(id: 1, title: "Pay phone installment", category: "task", priority: "high", scheduled_for: "Today"),
+                WidgetAssistantTask(id: 2, title: "Check groceries", category: "reminder", priority: "normal", scheduled_for: "")
+            ],
             updated_at: ""
         )
     }
@@ -166,7 +171,6 @@ struct PersonalERPWidgetEntryView: View {
     }
 }
 
-@main
 struct PersonalERPWidget: Widget {
     let kind: String = "PersonalERPWidget"
 
@@ -178,5 +182,98 @@ struct PersonalERPWidget: Widget {
         .configurationDisplayName("Wealth Summary")
         .description("Today's spend, monthly budget left, and recent transactions.")
         .supportedFamilies([.systemSmall, .systemMedium, .accessoryRectangular])
+    }
+}
+
+struct AssistantWidgetEntryView: View {
+    @Environment(\.widgetFamily) var family
+    var entry: ERPEntry
+
+    var body: some View {
+        if let s = entry.summary {
+            let count = s.assistant_pending_count ?? 0
+            let tasks = s.assistant_tasks ?? []
+            switch family {
+            case .accessoryRectangular:
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("AI Tasks (\(count))")
+                        .font(.caption.bold())
+                    Text(tasks.first?.title ?? "All caught up")
+                        .font(.caption2)
+                        .lineLimit(2)
+                }
+            default:
+                let maxItems = family == .systemMedium ? 3 : 2
+                VStack(alignment: .leading, spacing: 5) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "sparkles")
+                            .font(.caption2.bold())
+                            .foregroundStyle(Color(red: 0.51, green: 0.55, blue: 0.97))
+                        Text("AI Assistant")
+                            .font(.caption2.bold())
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Text("\(count)")
+                            .font(.caption2.bold().monospacedDigit())
+                            .foregroundStyle(count > 0 ? Color(red: 0.51, green: 0.55, blue: 0.97) : .green)
+                    }
+                    if tasks.isEmpty {
+                        Spacer()
+                        Text("All caught up!")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.green)
+                        Spacer()
+                    } else {
+                        ForEach(tasks.prefix(maxItems)) { t in
+                            HStack(spacing: 4) {
+                                Circle()
+                                    .fill(t.priority == "high" ? Color.red : Color(red: 0.51, green: 0.55, blue: 0.97))
+                                    .frame(width: 5, height: 5)
+                                Text(t.title)
+                                    .font(.caption2.weight(.medium))
+                                    .lineLimit(1)
+                                Spacer()
+                                if family == .systemMedium && !t.scheduled_for.isEmpty {
+                                    Text(t.scheduled_for)
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                        }
+                        Spacer(minLength: 0)
+                    }
+                }
+            }
+        } else {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("AI Assistant")
+                    .font(.caption.bold())
+                Text(entry.errorText ?? "Unavailable")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+}
+
+struct AssistantWidget: Widget {
+    let kind: String = "AssistantWidget"
+
+    var body: some WidgetConfiguration {
+        StaticConfiguration(kind: kind, provider: ERPProvider()) { entry in
+            AssistantWidgetEntryView(entry: entry)
+                .containerBackground(Color(red: 0.067, green: 0.071, blue: 0.086), for: .widget)
+        }
+        .configurationDisplayName("AI Assistant")
+        .description("Pending AI action items and reminders.")
+        .supportedFamilies([.systemSmall, .systemMedium, .accessoryRectangular])
+    }
+}
+
+@main
+struct PersonalERPWidgets: WidgetBundle {
+    var body: some Widget {
+        PersonalERPWidget()
+        AssistantWidget()
     }
 }

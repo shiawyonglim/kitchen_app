@@ -1616,6 +1616,8 @@ def test_widget_summary_requires_token_and_returns_compact_payload(monkeypatch):
         assert body["budget_remaining_myr"] == 2987.5
         assert len(body["recent"]) == 1
         assert body["recent"][0]["merchant"] == "MIXUE SRI PETALING"
+        assert body["assistant_pending_count"] == 0
+        assert body["assistant_tasks"] == []
     finally:
         app.dependency_overrides.clear()
 

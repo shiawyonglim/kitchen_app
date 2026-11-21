@@ -423,6 +423,7 @@ def get_widget_summary(
     db: Session = Depends(get_db),
 ):
     """Lightweight JSON summary for iPhone widgets, authenticated via Bearer session token or WIDGET_API_TOKEN."""
+    from app.modules.assistant import service as assistant_service
     from app.modules.auth import service as auth_service
     from app.modules.settings import service as settings_service
 
@@ -472,6 +473,7 @@ def get_widget_summary(
             for e in entries
             if not e.is_self_transfer
         ][:5]
+        pending_tasks = assistant_service.list_items(db, status="pending")
 
         return {
             "month": month_str,
@@ -491,6 +493,17 @@ def get_widget_summary(
                 for a in summary.account_balances[:4]
             ],
             "recent": recent,
+            "assistant_pending_count": len(pending_tasks),
+            "assistant_tasks": [
+                {
+                    "id": t.id,
+                    "title": t.title,
+                    "category": t.category,
+                    "priority": t.priority,
+                    "scheduled_for": t.scheduled_for,
+                }
+                for t in pending_tasks[:4]
+            ],
             "updated_at": datetime.now(timezone.utc).isoformat(),
         }
     finally:
