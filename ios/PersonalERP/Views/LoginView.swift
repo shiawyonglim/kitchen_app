@@ -2,7 +2,11 @@ import SwiftUI
 
 struct LoginView: View {
     @EnvironmentObject private var appState: AppState
-    @State private var baseURL: String = SharedConfig.lastBaseURL()
+    @State private var baseURL: String = {
+        let saved = SharedConfig.lastBaseURL()
+        if !saved.isEmpty { return saved }
+        return (Bundle.main.object(forInfoDictionaryKey: "ERPWidgetBaseURL") as? String) ?? ""
+    }()
     @State private var email: String = ""
     @State private var password: String = ""
 

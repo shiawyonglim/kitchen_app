@@ -23,6 +23,7 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.shiawyong.personalerp
         INFOPLIST_FILE: PersonalERP/Info.plist
         CODE_SIGN_ENTITLEMENTS: PersonalERP/PersonalERP.entitlements
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         MARKETING_VERSION: "1.0.0"
         CURRENT_PROJECT_VERSION: "1"
     dependencies:

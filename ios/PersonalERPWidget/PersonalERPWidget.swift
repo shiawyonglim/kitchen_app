@@ -58,6 +58,11 @@ struct ERPProvider: AppIntentTimelineProvider {
         if let shared = SharedConfig.loadCredentials() {
             return (shared.baseURL, shared.token)
         }
+        if let plistURL = Bundle.main.object(forInfoDictionaryKey: "ERPWidgetBaseURL") as? String,
+           let plistTok = Bundle.main.object(forInfoDictionaryKey: "ERPWidgetToken") as? String,
+           !plistURL.isEmpty, !plistTok.isEmpty {
+            return (plistURL.trimmingCharacters(in: CharacterSet(charactersIn: "/")), plistTok)
+        }
         return nil
     }
 

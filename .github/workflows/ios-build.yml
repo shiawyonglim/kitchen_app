@@ -18,6 +18,22 @@ jobs:
       - name: Install XcodeGen
         run: brew install xcodegen
 
+      - name: Inject build-time widget config from secrets
+        env:
+          WIDGET_BASE_URL: ${{ secrets.WIDGET_BASE_URL }}
+          WIDGET_API_TOKEN: ${{ secrets.WIDGET_API_TOKEN }}
+        run: |
+          if [ -n "$WIDGET_BASE_URL" ]; then
+            /usr/libexec/PlistBuddy -c "Delete :ERPWidgetBaseURL" ios/PersonalERP/Info.plist 2>/dev/null || true
+            /usr/libexec/PlistBuddy -c "Add :ERPWidgetBaseURL string $WIDGET_BASE_URL" ios/PersonalERP/Info.plist
+            /usr/libexec/PlistBuddy -c "Delete :ERPWidgetBaseURL" ios/PersonalERPWidget/Info.plist 2>/dev/null || true
+            /usr/libexec/PlistBuddy -c "Add :ERPWidgetBaseURL string $WIDGET_BASE_URL" ios/PersonalERPWidget/Info.plist
+          fi
+          if [ -n "$WIDGET_API_TOKEN" ]; then
+            /usr/libexec/PlistBuddy -c "Delete :ERPWidgetToken" ios/PersonalERPWidget/Info.plist 2>/dev/null || true
+            /usr/libexec/PlistBuddy -c "Add :ERPWidgetToken string $WIDGET_API_TOKEN" ios/PersonalERPWidget/Info.plist
+          fi
+
       - name: Generate Xcode project
         run: |
           cd ios
