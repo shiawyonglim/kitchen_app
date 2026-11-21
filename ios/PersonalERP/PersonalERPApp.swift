@@ -10,6 +10,7 @@ final class AppState: ObservableObject {
         f.dateFormat = "yyyy-MM"
         return f.string(from: Date())
     }()
+    @Published var availableMonths: [String] = []
     @Published var summary: WealthSummary?
     @Published var widgetSummary: WidgetSummary?
     @Published var entries: [LedgerEntry] = []
@@ -53,6 +54,15 @@ final class AppState: ObservableObject {
             widgetSummary = wid
             entries = ent
             categories = cats.map(\.name)
+            if availableMonths.isEmpty, let allSum = try? await APIClient.shared.fetchSummary(month: "") {
+                let months = (allSum.monthly_series ?? []).map(\.month).sorted(by: >)
+                if !months.isEmpty {
+                    availableMonths = months
+                }
+            }
+            if !selectedMonth.isEmpty && !availableMonths.contains(selectedMonth) {
+                availableMonths = ([selectedMonth] + availableMonths).sorted(by: >)
+            }
             WidgetCenter.shared.reloadAllTimelines()
             if let cfg = try? await APIClient.shared.fetchWidgetConfig() {
                 widgetToken = cfg.widget_api_token
@@ -65,6 +75,11 @@ final class AppState: ObservableObject {
         } catch {
             errorMessage = error.localizedDescription
         }
+    }
+
+    func selectMonth(_ month: String) async {
+        selectedMonth = month
+        await loadAll()
     }
 
     func syncNow() async {
@@ -99,14 +114,32 @@ final class AppState: ObservableObject {
         }
     }
 
-    func addManual(merchant: String, category: String, txType: String, amount: Double, account: String, remark: String) async -> Bool {
+    func toggleSelfTransfer(entryId: Int, isSelf: Bool) async {
+        do {
+            _ = try await APIClient.shared.toggleSelfTransfer(id: entryId, isSelf: isSelf)
+            await loadAll()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func deleteEntry(entryId: Int) async {
+        do {
+            try await APIClient.shared.deleteEntry(id: entryId)
+            await loadAll()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func addManual(merchant: String, category: String, txType: String, amount: Double, occurredAt: Date, account: String, remark: String) async -> Bool {
         let f = ISO8601DateFormatter()
         let payload = ManualLedgerRequest(
             merchant: merchant,
             category: category,
             tx_type: txType,
             amount_myr: amount,
-            occurred_at: f.string(from: Date()),
+            occurred_at: f.string(from: occurredAt),
             account_name: account,
             remark: remark
         )
@@ -195,21 +228,50 @@ struct PersonalERPApp: App {
 
 struct MainTabView: View {
     @EnvironmentObject private var appState: AppState
+    @State private var selectedTab = 0
+    @State private var showQuickAdd = false
 
     var body: some View {
-        TabView {
-            DashboardView()
-                .tabItem { Label("Wealth", systemImage: "chart.pie.fill") }
+        ZStack(alignment: .bottomLeading) {
+            TabView(selection: $selectedTab) {
+                DashboardView()
+                    .tabItem { Label("Wealth", systemImage: "chart.pie.fill") }
+                    .tag(0)
 
-            TransactionsView()
-                .tabItem { Label("Transactions", systemImage: "list.bullet.rectangle") }
+                TransactionsView()
+                    .tabItem { Label("Transactions", systemImage: "list.bullet.rectangle") }
+                    .tag(1)
 
-            AssistantView()
-                .tabItem { Label("Assistant", systemImage: "sparkles") }
+                AssistantView()
+                    .tabItem { Label("Assistant", systemImage: "sparkles") }
+                    .tag(2)
 
-            SettingsView()
-                .tabItem { Label("Settings", systemImage: "gearshape.fill") }
+                SettingsView()
+                    .tabItem { Label("Settings", systemImage: "gearshape.fill") }
+                    .tag(3)
+            }
+            .tint(Color(red: 0.51, green: 0.55, blue: 0.97))
+
+            if selectedTab == 0 || selectedTab == 1 {
+                Button {
+                    showQuickAdd = true
+                } label: {
+                    Image(systemName: "plus")
+                        .font(.title2.weight(.bold))
+                        .foregroundStyle(.white)
+                        .frame(width: 52, height: 52)
+                        .background(Color(red: 0.37, green: 0.42, blue: 0.82))
+                        .clipShape(Circle())
+                        .shadow(color: .black.opacity(0.4), radius: 8, x: 0, y: 4)
+                }
+                .padding(.leading, 18)
+                .padding(.bottom, 64)
+                .accessibilityLabel("Add Transaction")
+            }
         }
-        .tint(Color(red: 0.51, green: 0.55, blue: 0.97))
+        .sheet(isPresented: $showQuickAdd) {
+            AddTransactionSheet()
+                .environmentObject(appState)
+        }
     }
 }

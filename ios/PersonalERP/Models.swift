@@ -22,6 +22,10 @@ struct BankAccountBalance: Codable, Identifiable {
     var stableId: String { name }
 }
 
+struct MonthlyCategoryPoint: Codable {
+    let month: String
+}
+
 struct WealthSummary: Codable {
     let total_income_myr: Double
     let total_repayment_myr: Double
@@ -30,6 +34,7 @@ struct WealthSummary: Codable {
     let rolling_30d_daily_burn_myr: Double
     let period_daily_burn_myr: Double
     let transaction_count: Int
+    let monthly_series: [MonthlyCategoryPoint]?
     let category_breakdown: [String: Double]
     let account_balances: [BankAccountBalance]
     let remaining_fixed_bills_myr: Double

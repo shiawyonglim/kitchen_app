@@ -31,8 +31,8 @@ class SaveWhitelistRequest(BaseModel):
 
 
 class SyncRequest(BaseModel):
-    start_date: date
-    end_date: date
+    start_date: date | None = None
+    end_date: date | None = None
     account_name: str | None = None
 
 
@@ -248,4 +248,16 @@ class WealthSummary(BaseModel):
     remaining_fixed_bills_myr: float = 0.0
     category_budgets: dict[str, float] = {}
     burn_pace_ratio: float | None = None
+
+
+class SplitPartInput(BaseModel):
+    amount_myr: float = Field(..., gt=0)
+    merchant: str | None = Field(default=None, max_length=255)
+    category: str | None = Field(default=None, max_length=64)
+    tx_type: Literal["expense", "income", "repayment"] | None = None
+    linked_entry_id: int | None = None
+
+
+class SplitEntryRequest(BaseModel):
+    parts: list[SplitPartInput] = Field(..., min_length=2, max_length=10)
 

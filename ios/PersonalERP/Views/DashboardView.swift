@@ -106,16 +106,30 @@ struct DashboardView: View {
                         }
                     }
 
-                    let topCats = sum.category_breakdown.sorted { $0.value > $1.value }.prefix(6)
+                    let topCats = sum.category_breakdown.sorted { $0.value > $1.value }
                     if !topCats.isEmpty {
-                        Section("Top Categories") {
-                            ForEach(Array(topCats), id: \.key) { cat, amount in
-                                HStack {
-                                    Text(cat)
-                                    Spacer()
-                                    Text(formatRM(amount))
-                                        .monospacedDigit()
-                                        .foregroundStyle(.secondary)
+                        let totalCatSpend = max(1.0, sum.total_expense_myr)
+                        Section("Spending by Category") {
+                            ForEach(Array(topCats.prefix(8)), id: \.key) { cat, amount in
+                                let pct = min(100.0, (amount / totalCatSpend) * 100.0)
+                                NavigationLink {
+                                    CategoryDetailView(category: cat)
+                                        .environmentObject(appState)
+                                } label: {
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        HStack {
+                                            Text(cat)
+                                                .fontWeight(.medium)
+                                            Spacer()
+                                            Text("\(formatRM(amount)) · \(String(format: "%.0f", pct))%")
+                                                .font(.caption)
+                                                .monospacedDigit()
+                                                .foregroundStyle(.secondary)
+                                        }
+                                        ProgressView(value: pct, total: 100)
+                                            .tint(Color(red: 0.51, green: 0.55, blue: 0.97))
+                                    }
+                                    .padding(.vertical, 2)
                                 }
                             }
                         }
@@ -129,6 +143,34 @@ struct DashboardView: View {
                 await appState.loadAll()
             }
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Menu {
+                        Button {
+                            Task { await appState.selectMonth("") }
+                        } label: {
+                            Label("All Months", systemImage: appState.selectedMonth.isEmpty ? "checkmark" : "calendar")
+                        }
+                        ForEach(appState.availableMonths, id: \.self) { m in
+                            Button {
+                                Task { await appState.selectMonth(m) }
+                            } label: {
+                                if appState.selectedMonth == m {
+                                    Label(m, systemImage: "checkmark")
+                                } else {
+                                    Text(m)
+                                }
+                            }
+                        }
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "calendar")
+                            Text(appState.selectedMonth.isEmpty ? "All Months" : appState.selectedMonth)
+                                .fontWeight(.medium)
+                            Image(systemName: "chevron.down")
+                                .font(.caption2)
+                        }
+                    }
+                }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
                         Task { await appState.syncNow() }
@@ -138,6 +180,47 @@ struct DashboardView: View {
                     .disabled(appState.isLoading)
                 }
             }
+        }
+    }
+}
+
+private struct CategoryDetailView: View {
+    @EnvironmentObject private var appState: AppState
+    let category: String
+    @State private var editingEntry: LedgerEntry?
+
+    private var matching: [LedgerEntry] {
+        appState.entries
+            .filter { $0.category == category && !$0.is_self_transfer && $0.tx_type == "expense" }
+            .sorted { $0.effectiveAmount > $1.effectiveAmount }
+    }
+
+    var body: some View {
+        List(matching) { entry in
+            Button {
+                editingEntry = entry
+            } label: {
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(entry.effectiveMerchant)
+                            .font(.subheadline.weight(.medium))
+                            .foregroundStyle(.primary)
+                            .lineLimit(1)
+                        Text("\(entry.shortDate) · \(entry.account_name)")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Text("-\(formatRM(entry.effectiveAmount))")
+                        .font(.subheadline.weight(.semibold).monospacedDigit())
+                        .foregroundStyle(.red)
+                }
+            }
+        }
+        .navigationTitle(category)
+        .sheet(item: $editingEntry) { entry in
+            EditTransactionSheet(entry: entry)
+                .environmentObject(appState)
         }
     }
 }

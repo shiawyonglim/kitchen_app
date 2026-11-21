@@ -1620,6 +1620,72 @@ def test_widget_summary_requires_token_and_returns_compact_payload(monkeypatch):
         app.dependency_overrides.clear()
 
 
+def test_split_entry_and_link_back_to_two_expenses():
+    import pytest
+    from app.modules.wealth import service
+    from app.modules.wealth.schemas import ManualLedgerRequest, SplitPartInput
+
+    db = _make_session()
+    dinner = service.add_manual_entry(
+        db,
+        ManualLedgerRequest(
+            merchant="Dinner Group Bill",
+            category="Food & Beverage",
+            tx_type="expense",
+            amount_myr=40.00,
+            occurred_at=datetime(2026, 11, 20, 19, 0, tzinfo=timezone.utc),
+            account_name="Touch 'n Go",
+        ),
+    )
+    badminton = service.add_manual_entry(
+        db,
+        ManualLedgerRequest(
+            merchant="Badminton Court",
+            category="Badminton",
+            tx_type="expense",
+            amount_myr=60.00,
+            occurred_at=datetime(2026, 11, 20, 20, 0, tzinfo=timezone.utc),
+            account_name="Touch 'n Go",
+        ),
+    )
+    combined_rep = service.add_manual_entry(
+        db,
+        ManualLedgerRequest(
+            merchant="Alex Combined Transfer",
+            category="P2P Transfer In",
+            tx_type="repayment",
+            amount_myr=50.00,
+            occurred_at=datetime(2026, 11, 21, 9, 0, tzinfo=timezone.utc),
+            account_name="Touch 'n Go",
+        ),
+    )
+
+    with pytest.raises(ValueError):
+        service.split_entry(
+            db,
+            combined_rep.id,
+            [SplitPartInput(amount_myr=10.0), SplitPartInput(amount_myr=10.0)],
+        )
+
+    parts = service.split_entry(
+        db,
+        combined_rep.id,
+        [
+            SplitPartInput(amount_myr=20.00, merchant="Alex Dinner Share", linked_entry_id=dinner.id),
+            SplitPartInput(amount_myr=30.00, merchant="Alex Badminton Share", linked_entry_id=badminton.id),
+        ],
+    )
+    assert parts is not None and len(parts) == 2
+    assert parts[0].amount_myr == 20.00 and parts[0].linked_entry_id == dinner.id
+    assert parts[1].amount_myr == 30.00 and parts[1].linked_entry_id == badminton.id
+
+    summary = service.get_summary(db, month="2026-11")
+    # Dinner 40 - 20 = 20, Badminton 60 - 30 = 30 -> total net expense = 50.00
+    assert summary.total_expense_myr == 50.00
+    assert summary.category_breakdown["Food & Beverage"] == 20.00
+    assert summary.category_breakdown["Badminton"] == 30.00
+
+
 def test_notify_new_transactions_posts_to_ntfy(monkeypatch):
     import urllib.request
     from app.config import settings
@@ -1675,14 +1741,17 @@ def test_notify_new_transactions_posts_to_ntfy(monkeypatch):
     assert "-RM 15.50 · MIXUE (Food & Beverage) [Ryt Bank]" in captured["body"]
 
 
-def test_mobile_login_bearer_auth_works_without_csrf():
+def test_mobile_login_bearer_auth_works_without_csrf(monkeypatch):
     from fastapi.testclient import TestClient
     from sqlalchemy import create_engine
     from sqlalchemy.orm import sessionmaker
     from sqlalchemy.pool import StaticPool
+    from app.config import settings
     from app.database import Base, get_db
     from app.main import app
     from app.modules.auth import service as auth_service
+
+    monkeypatch.setattr(settings, "email_mode", "demo")
 
     eng = create_engine(
         "sqlite:///:memory:",
@@ -1732,6 +1801,13 @@ def test_mobile_login_bearer_auth_works_without_csrf():
         )
         assert post_res.status_code == 200
         assert post_res.json()["merchant"] == "Coffee Shop"
+
+        sync_res = client.post(
+            "/api/wealth/sync",
+            headers={"Authorization": f"Bearer {token}"},
+            json={},
+        )
+        assert sync_res.status_code == 200
     finally:
         app.dependency_overrides.clear()
 

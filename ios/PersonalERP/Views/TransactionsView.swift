@@ -5,11 +5,11 @@ struct TransactionsView: View {
     @State private var searchText = ""
     @State private var selectedFilter = "all"
     @State private var hideSelf = false
+    @State private var sortByAmount = false
     @State private var editingEntry: LedgerEntry?
-    @State private var showAddSheet = false
 
     private var filteredEntries: [LedgerEntry] {
-        appState.entries.filter { entry in
+        let base = appState.entries.filter { entry in
             if hideSelf && entry.is_self_transfer && selectedFilter != "self" {
                 return false
             }
@@ -32,6 +32,10 @@ struct TransactionsView: View {
             }
             return true
         }
+        if sortByAmount {
+            return base.sorted { $0.effectiveAmount > $1.effectiveAmount }
+        }
+        return base.sorted { $0.occurred_at > $1.occurred_at }
     }
 
     var body: some View {
@@ -46,6 +50,14 @@ struct TransactionsView: View {
                         Text("Self").tag("self")
                     }
                     .pickerStyle(.segmented)
+
+                    Button {
+                        sortByAmount.toggle()
+                    } label: {
+                        Image(systemName: sortByAmount ? "arrow.down.circle.fill" : "calendar")
+                    }
+                    .buttonStyle(.bordered)
+                    .font(.caption)
 
                     Toggle("Hide Self", isOn: $hideSelf)
                         .toggleStyle(.button)
@@ -86,6 +98,13 @@ struct TransactionsView: View {
                             }
                         }
                     }
+                    .swipeActions(edge: .trailing) {
+                        Button(role: .destructive) {
+                            Task { await appState.deleteEntry(entryId: entry.id) }
+                        } label: {
+                            Label("Delete", systemImage: "trash")
+                        }
+                    }
                 }
                 .listStyle(.plain)
                 .refreshable {
@@ -95,20 +114,37 @@ struct TransactionsView: View {
             .searchable(text: $searchText, prompt: "Search merchant, category, account")
             .navigationTitle("Transactions")
             .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        showAddSheet = true
+                ToolbarItem(placement: .topBarLeading) {
+                    Menu {
+                        Button {
+                            Task { await appState.selectMonth("") }
+                        } label: {
+                            Label("All Months", systemImage: appState.selectedMonth.isEmpty ? "checkmark" : "calendar")
+                        }
+                        ForEach(appState.availableMonths, id: \.self) { m in
+                            Button {
+                                Task { await appState.selectMonth(m) }
+                            } label: {
+                                if appState.selectedMonth == m {
+                                    Label(m, systemImage: "checkmark")
+                                } else {
+                                    Text(m)
+                                }
+                            }
+                        }
                     } label: {
-                        Image(systemName: "plus")
+                        HStack(spacing: 4) {
+                            Image(systemName: "calendar")
+                            Text(appState.selectedMonth.isEmpty ? "All Months" : appState.selectedMonth)
+                                .fontWeight(.medium)
+                            Image(systemName: "chevron.down")
+                                .font(.caption2)
+                        }
                     }
                 }
             }
             .sheet(item: $editingEntry) { entry in
                 EditTransactionSheet(entry: entry)
-                    .environmentObject(appState)
-            }
-            .sheet(isPresented: $showAddSheet) {
-                AddTransactionSheet()
                     .environmentObject(appState)
             }
         }
@@ -128,7 +164,7 @@ struct TransactionsView: View {
     }
 }
 
-private struct EditTransactionSheet: View {
+struct EditTransactionSheet: View {
     @EnvironmentObject private var appState: AppState
     @Environment(\.dismiss) private var dismiss
     let entry: LedgerEntry
@@ -173,6 +209,21 @@ private struct EditTransactionSheet: View {
                             dismiss()
                         }
                     }
+                    Button(entry.is_self_transfer ? "Unmark Self-Transfer" : "Mark as Self-Transfer") {
+                        Task {
+                            await appState.toggleSelfTransfer(entryId: entry.id, isSelf: !entry.is_self_transfer)
+                            dismiss()
+                        }
+                    }
+                }
+
+                Section {
+                    Button("Delete Transaction", role: .destructive) {
+                        Task {
+                            await appState.deleteEntry(entryId: entry.id)
+                            dismiss()
+                        }
+                    }
                 }
             }
             .navigationTitle("Edit Transaction")
@@ -185,7 +236,7 @@ private struct EditTransactionSheet: View {
     }
 }
 
-private struct AddTransactionSheet: View {
+struct AddTransactionSheet: View {
     @EnvironmentObject private var appState: AppState
     @Environment(\.dismiss) private var dismiss
     @State private var merchant = ""
@@ -194,6 +245,7 @@ private struct AddTransactionSheet: View {
     @State private var category = "Food & Beverage"
     @State private var account = "Touch 'n Go"
     @State private var remark = ""
+    @State private var occurredAt = Date()
 
     var body: some View {
         NavigationStack {
@@ -202,6 +254,7 @@ private struct AddTransactionSheet: View {
                     TextField("Merchant", text: $merchant)
                     TextField("Amount (MYR)", text: $amountText)
                         .keyboardType(.decimalPad)
+                    DatePicker("Date", selection: $occurredAt, displayedComponents: .date)
                     Picker("Type", selection: $txType) {
                         Text("Expense").tag("expense")
                         Text("Income").tag("income")
@@ -229,6 +282,7 @@ private struct AddTransactionSheet: View {
                                 category: category,
                                 txType: txType,
                                 amount: amt,
+                                occurredAt: occurredAt,
                                 account: account,
                                 remark: remark
                             ) {

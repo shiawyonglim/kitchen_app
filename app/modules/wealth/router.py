@@ -1,6 +1,6 @@
 import asyncio
 import hmac
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, UploadFile
 from fastapi.responses import RedirectResponse, StreamingResponse
 from sqlalchemy.orm import Session
@@ -26,6 +26,7 @@ from app.modules.wealth.schemas import (
     ResolveConflictRequest,
     SaveWhitelistRequest,
     SenderWhitelistItem,
+    SplitEntryRequest,
     StatementBackfillResult,
     SyncRequest,
     SyncResult,
@@ -162,6 +163,17 @@ def unlink_entry_repayment(entry_id: int, db: Session = Depends(get_db)):
     return updated
 
 
+@router.post("/entries/{entry_id}/split", response_model=list[LedgerEntryOut])
+def split_entry_bill(entry_id: int, req: SplitEntryRequest, db: Session = Depends(get_db)):
+    try:
+        rows = service.split_entry(db, entry_id, req.parts)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if rows is None:
+        raise HTTPException(status_code=404, detail="Ledger entry not found")
+    return rows
+
+
 @router.get("/entries/{entry_id}/email-link")
 def open_entry_email(entry_id: int, db: Session = Depends(get_db)):
     url = service.resolve_entry_email_url(db, entry_id)
@@ -237,12 +249,18 @@ def resolve_conflicts(req: ResolveConflictRequest, db: Session = Depends(get_db)
 
 
 @router.post("/sync", response_model=SyncResult)
-def sync_transactions(req: SyncRequest, db: Session = Depends(get_db)):
-    if req.end_date < req.start_date:
+def sync_transactions(req: SyncRequest | None = None, db: Session = Depends(get_db)):
+    from app.modules.settings import service as settings_service
+
+    end_d = (req.end_date if req else None) or date.today()
+    lookback = settings_service.get_settings(db).auto_sync_lookback_days
+    start_d = (req.start_date if req else None) or (end_d - timedelta(days=lookback))
+    acct = req.account_name if req else None
+    if end_d < start_d:
         raise HTTPException(status_code=400, detail="end_date must be on or after start_date")
     try:
         return service.sync_whitelisted_transactions(
-            db, req.start_date, req.end_date, account_name=req.account_name
+            db, start_d, end_d, account_name=acct
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

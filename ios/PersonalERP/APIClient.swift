@@ -83,12 +83,14 @@ final class APIClient {
     }
 
     func fetchSummary(month: String) async throws -> WealthSummary {
-        let req = try makeRequest(path: "/api/wealth/summary?month=\(month)")
+        let suffix = month.isEmpty ? "" : "?month=\(month)"
+        let req = try makeRequest(path: "/api/wealth/summary\(suffix)")
         return try await perform(req, as: WealthSummary.self)
     }
 
     func fetchEntries(month: String) async throws -> [LedgerEntry] {
-        let req = try makeRequest(path: "/api/wealth/entries?month=\(month)")
+        let suffix = month.isEmpty ? "" : "?month=\(month)"
+        let req = try makeRequest(path: "/api/wealth/entries\(suffix)")
         return try await perform(req, as: [LedgerEntry].self)
     }
 
@@ -106,6 +108,20 @@ final class APIClient {
     func toggleEntryType(id: Int) async throws -> LedgerEntry {
         let req = try makeRequest(path: "/api/wealth/entries/\(id)/toggle-type", method: "PATCH")
         return try await perform(req, as: LedgerEntry.self)
+    }
+
+    func toggleSelfTransfer(id: Int, isSelf: Bool) async throws -> LedgerEntry {
+        let body = try encoder.encode(["is_self_transfer": isSelf])
+        let req = try makeRequest(path: "/api/wealth/entries/\(id)", method: "PATCH", body: body)
+        return try await perform(req, as: LedgerEntry.self)
+    }
+
+    func deleteEntry(id: Int) async throws {
+        let req = try makeRequest(path: "/api/wealth/entries/\(id)", method: "DELETE")
+        let (_, resp) = try await URLSession.shared.data(for: req)
+        guard let http = resp as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+            throw APIError.server(0, "Delete failed")
+        }
     }
 
     func addManualEntry(_ payload: ManualLedgerRequest) async throws -> LedgerEntry {
