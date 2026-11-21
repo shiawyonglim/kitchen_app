@@ -4,7 +4,7 @@ from pydantic import BaseModel, Field
 
 class CreateAssetRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=255)
-    search_query: str = Field(..., min_length=2, max_length=255)
+    search_query: str = Field(default="", max_length=255)
     category: str = Field(default="Hardware", max_length=64)
     condition: str = Field(default="Used", max_length=64)
     purchase_price_myr: float = Field(default=0.0, ge=0)
@@ -19,6 +19,9 @@ class ValuationOut(BaseModel):
     sample_count: int
     source: str
     scraped_at: datetime
+    summary: str = ""
+    citations: list[dict[str, str]] = Field(default_factory=list)
+    source_names: list[str] = Field(default_factory=list)
 
     model_config = {"from_attributes": True}
 

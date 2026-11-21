@@ -661,6 +661,8 @@ def _enrich_linked_fields(all_rows: list[LedgerEntry], target_rows: list[LedgerE
         parent = by_id.get(r.linked_entry_id) if r.linked_entry_id else None
         r.linked_merchant = normalize_merchant_display(parent.merchant) if parent else None
         r.gmail_thread_id = payload.get("gmail_thread_id")
+        r.receipt_items = payload.get("receipt_items") if isinstance(payload.get("receipt_items"), list) else []
+        r.added_to_kitchen = payload.get("added_to_kitchen") if isinstance(payload.get("added_to_kitchen"), list) else []
 
         raw_split = payload.get("split_count")
         split_count = int(raw_split) if isinstance(raw_split, (int, float)) and int(raw_split) >= 2 else None
@@ -798,6 +800,68 @@ def unlink_repayment(db: Session, repayment_id: int) -> LedgerEntry | None:
     all_rows = list(db.scalars(select(LedgerEntry)).all())
     _enrich_linked_fields(all_rows, [rep])
     return rep
+
+
+def split_entry(db: Session, entry_id: int, parts: list) -> list[LedgerEntry] | None:
+    """Split one LedgerEntry into multiple independent entries that can each be categorized and linked."""
+    import uuid
+
+    entry = db.get(LedgerEntry, entry_id)
+    if not entry:
+        return None
+    if len(parts) < 2:
+        raise ValueError("At least 2 split parts are required.")
+
+    total_parts = round(sum(float(p.amount_myr) for p in parts), 2)
+    if abs(total_parts - round(entry.amount_myr, 2)) > 0.02:
+        raise ValueError(
+            f"Split amounts (RM {total_parts:.2f}) must equal original transaction amount (RM {entry.amount_myr:.2f})."
+        )
+
+    orig_amount = entry.amount_myr
+    orig_payload = dict(entry.raw_payload) if isinstance(entry.raw_payload, dict) else {}
+
+    p0 = parts[0]
+    entry.amount_myr = round(float(p0.amount_myr), 2)
+    if p0.merchant and p0.merchant.strip():
+        entry.merchant = p0.merchant.strip()
+    if p0.category and p0.category.strip():
+        entry.category = p0.category.strip()
+    if p0.tx_type:
+        entry.tx_type = p0.tx_type
+    if p0.linked_entry_id is not None and p0.linked_entry_id != entry.id:
+        entry.linked_entry_id = p0.linked_entry_id
+    entry.manual_override = True
+    entry.raw_payload = {**orig_payload, "split_from_amount": orig_amount, "split_part": 1}
+
+    created: list[LedgerEntry] = [entry]
+    for idx, part in enumerate(parts[1:], start=2):
+        child_hash = f"{entry.idempotency_hash}::split::{idx}::{uuid.uuid4().hex[:8]}"
+        child = LedgerEntry(
+            idempotency_hash=child_hash,
+            sender_email=entry.sender_email,
+            subject=entry.subject,
+            merchant=(part.merchant.strip() if part.merchant and part.merchant.strip() else f"{entry.merchant} (Split {idx})"),
+            category=(part.category.strip() if part.category and part.category.strip() else entry.category),
+            tx_type=(part.tx_type or entry.tx_type),
+            amount_myr=round(float(part.amount_myr), 2),
+            account_name=entry.account_name,
+            is_self_transfer=entry.is_self_transfer,
+            is_claimable=entry.is_claimable,
+            linked_entry_id=(part.linked_entry_id if part.linked_entry_id != entry.id else None),
+            manual_override=True,
+            raw_payload={**orig_payload, "split_from_amount": orig_amount, "split_parent_id": entry.id, "split_part": idx},
+            occurred_at=entry.occurred_at,
+        )
+        db.add(child)
+        created.append(child)
+
+    db.commit()
+    for row in created:
+        db.refresh(row)
+    all_rows = list(db.scalars(select(LedgerEntry)).all())
+    _enrich_linked_fields(all_rows, created)
+    return created
 
 
 def seed_default_bank_accounts(db: Session) -> None:

@@ -1,30 +1,17 @@
 from __future__ import annotations
 
-import json
 import random
 import re
 import statistics
-import time
-from dataclasses import dataclass
-from urllib.parse import quote
-import httpx
-from bs4 import BeautifulSoup
+from dataclasses import dataclass, field
 
-from app.config import settings
+from app.modules.assets.ai_valuator import AIValuationError, lookup_asset_valuation
 
 _PRICE_RE = re.compile(r"RM\s*([0-9]{1,3}(?:,[0-9]{3})*(?:\.[0-9]{1,2})?|[0-9]+(?:\.[0-9]{1,2})?)", re.IGNORECASE)
 
-_HEADERS = {
-    "User-Agent": (
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
-    ),
-    "Accept-Language": "en-MY,en;q=0.9",
-}
 
-
-class CarousellBlockedError(RuntimeError):
-    """Raised when Carousell returns 403/anti-bot protection during live scraping."""
+class CarousellBlockedError(AIValuationError):
+    """Legacy exception alias kept for backwards compatibility; inherits from AIValuationError."""
 
 
 @dataclass
@@ -36,6 +23,9 @@ class ScrapeResult:
     source: str
     filtered_prices: list[float]
     raw_prices: list[float]
+    summary: str = ""
+    citations: list[dict[str, str]] = field(default_factory=list)
+    source_names: list[str] = field(default_factory=list)
 
 
 def filter_outliers(prices: list[float]) -> list[float]:
@@ -53,31 +43,6 @@ def filter_outliers(prices: list[float]) -> list[float]:
     return filtered if filtered else clean
 
 
-def _extract_prices_from_html(html: str) -> list[float]:
-    soup = BeautifulSoup(html, "html.parser")
-    prices: list[float] = []
-
-    next_data = soup.find("script", id="__NEXT_DATA__")
-    if next_data and next_data.string:
-        try:
-            payload_text = json.dumps(json.loads(next_data.string))
-            for match in _PRICE_RE.findall(payload_text):
-                val = float(match.replace(",", ""))
-                if val >= 10:
-                    prices.append(val)
-        except Exception:
-            pass
-
-    if not prices:
-        text = soup.get_text(" ", strip=True)
-        for match in _PRICE_RE.findall(text):
-            val = float(match.replace(",", ""))
-            if val >= 10:
-                prices.append(val)
-
-    return prices[:40]
-
-
 def _simulated_market_prices(search_query: str) -> list[float]:
     q = search_query.lower()
     if "charizard" in q:
@@ -90,7 +55,7 @@ def _simulated_market_prices(search_query: str) -> list[float]:
 
 
 def parse_pasted_listings(raw_text: str) -> ScrapeResult:
-    """Extract RM/MYR prices from pasted Carousell search text and filter outliers."""
+    """Extract RM/MYR prices from pasted listing text and filter outliers."""
     raw_prices: list[float] = []
     for match in _PRICE_RE.findall(raw_text):
         val = float(match.replace(",", ""))
@@ -112,53 +77,32 @@ def parse_pasted_listings(raw_text: str) -> ScrapeResult:
         source="carousell_pasted",
         filtered_prices=filtered,
         raw_prices=raw_prices,
+        summary="Manual pasted listings",
     )
 
 
-def scrape_carousell_my(search_query: str) -> ScrapeResult:
-    """Scrape Carousell Malaysia with exponential backoff; raises if blocked in live mode."""
-    raw_prices: list[float] = []
-    source = "carousell_live"
-    last_status: int | None = None
-
-    if settings.carousell_mode.lower() == "live":
-        url = f"https://www.carousell.com.my/search/{quote(search_query)}"
-        for attempt in range(2):
-            try:
-                with httpx.Client(headers=_HEADERS, timeout=6.0, follow_redirects=True) as client:
-                    resp = client.get(url)
-                    last_status = resp.status_code
-                    if resp.status_code == 200:
-                        extracted = _extract_prices_from_html(resp.text)
-                        if extracted:
-                            raw_prices = extracted
-                            break
-                    elif resp.status_code in (403, 429):
-                        break
-            except Exception:
-                pass
-            time.sleep(0.4 * (2**attempt))
-
-        if not raw_prices:
-            raise CarousellBlockedError(
-                f"Carousell returned HTTP {last_status or 'timeout'} (anti-bot protection). "
-                "Use 'Paste Listings' on the asset card to compute an outlier-filtered median from real prices."
-            )
-    else:
-        raw_prices = _simulated_market_prices(search_query)
-        source = "carousell_demo"
-
-    filtered = filter_outliers(raw_prices)
-    if not filtered:
-        filtered = [0.0]
-
+def scrape_carousell_my(
+    search_query: str,
+    name: str = "",
+    condition: str = "Used",
+    category: str = "Hardware",
+) -> ScrapeResult:
+    """Delegate asset market valuation to AI web search (kept as thin compatibility wrapper)."""
+    res = lookup_asset_valuation(
+        name=name or search_query,
+        search_query=search_query,
+        condition=condition,
+        category=category,
+    )
     return ScrapeResult(
-        median_price_myr=round(statistics.median(filtered), 2),
-        min_price_myr=round(min(filtered), 2),
-        max_price_myr=round(max(filtered), 2),
-        sample_count=len(filtered),
-        source=source,
-        filtered_prices=filtered,
-        raw_prices=raw_prices,
+        median_price_myr=res.median_price_myr,
+        min_price_myr=res.min_price_myr,
+        max_price_myr=res.max_price_myr,
+        sample_count=res.sample_count,
+        source=res.source,
+        filtered_prices=res.filtered_prices,
+        raw_prices=res.raw_prices,
+        summary=res.summary,
+        citations=res.citations,
+        source_names=res.source_names,
     )
-

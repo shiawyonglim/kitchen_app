@@ -406,6 +406,45 @@
       .modal-tx-table-wrap tbody td:nth-child(2) { grid-column: 1; grid-row: 3; align-self: center; }
       .modal-tx-table-wrap tbody td:nth-child(5) { grid-column: 2; grid-row: 3; justify-self: end; align-self: center; }
     }
+
+    /* Compact Asset Tracker cards with subgrid track alignment */
+    .assets-compact-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+      gap: 0.625rem;
+    }
+    .asset-card {
+      container: asset-card / inline-size;
+      display: grid;
+      grid-row: span 3;
+      grid-template-rows: auto auto 1fr;
+      grid-template-rows: subgrid;
+      row-gap: 0.375rem;
+      padding: 0.75rem;
+      overflow: clip;
+    }
+    .asset-card h3 {
+      font-size: 0.75rem !important;
+      line-height: 1.3;
+    }
+    .asset-utility-card h3 {
+      font-size: 0.8125rem !important;
+      line-height: 1.35;
+    }
+    .asset-details summary {
+      list-style: none;
+      cursor: pointer;
+    }
+    .asset-details summary::-webkit-details-marker {
+      display: none;
+    }
+    .asset-details summary .asset-chev {
+      display: inline-block;
+      transition: transform 150ms ease;
+    }
+    .asset-details[open] summary .asset-chev {
+      transform: rotate(90deg);
+    }
   </style>
 </head>
 <body class="min-h-screen font-sans antialiased">
@@ -555,6 +594,34 @@
       <div class="px-5 py-3 border-t border-slate-800 flex justify-end gap-2 shrink-0">
         <button type="button" onclick="closeLinkRepaymentsModal()" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs text-slate-300">Cancel</button>
         <button type="submit" class="px-4 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-xs font-semibold text-white">Save Links</button>
+      </div>
+    </form>
+  </div>
+
+  <!-- Split Transaction Modal -->
+  <div id="split-entry-modal-backdrop" onclick="handleBackdropClick(event, closeSplitEntryModal)" class="hidden fixed inset-0 bg-black/75 z-[66] flex items-center justify-center p-4">
+    <form onsubmit="saveSplitEntry(event)" onclick="event.stopPropagation()" class="w-full max-w-2xl bg-slate-900 border border-emerald-500/40 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
+      <div class="flex items-center justify-between px-5 py-4 border-b border-slate-800 shrink-0">
+        <div>
+          <h2 class="text-sm font-bold text-white">Split Transaction into Multiple Items</h2>
+          <p class="text-[11px] text-slate-400 mt-0.5">Split one payment into separate amounts, categories, or linked transactions.</p>
+        </div>
+        <button type="button" onclick="closeSplitEntryModal()" class="text-slate-400 hover:text-white text-xl leading-none">&times;</button>
+      </div>
+      <div class="px-5 py-3 bg-slate-950/70 border-b border-slate-800 flex flex-wrap items-center justify-between gap-2 shrink-0">
+        <div id="split-entry-target" class="text-xs text-white"></div>
+        <div id="split-sum-status" class="text-xs font-mono-num"></div>
+      </div>
+      <div id="split-parts-list" class="p-4 overflow-y-auto space-y-2.5 text-xs flex-1"></div>
+      <div class="px-5 py-3 border-t border-slate-800 flex items-center justify-between gap-2 shrink-0">
+        <div class="flex gap-2">
+          <button type="button" onclick="addSplitPartRow()" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs text-emerald-300 font-medium">+ Add Part</button>
+          <button type="button" onclick="autoDetectSplitFromExpenses(true)" class="px-3 py-1.5 rounded-lg bg-sky-600/20 hover:bg-sky-600/40 border border-sky-500/30 text-xs text-sky-300 font-medium">Auto-Find Matches</button>
+        </div>
+        <div class="flex gap-2">
+          <button type="button" onclick="closeSplitEntryModal()" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs text-slate-300">Cancel</button>
+          <button type="submit" id="split-save-btn" class="px-4 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-xs font-semibold text-white">Split Transaction</button>
+        </div>
       </div>
     </form>
   </div>
@@ -873,8 +940,8 @@
       <button id="tab-assets" onclick="switchTab('assets')" class="shrink-0 whitespace-nowrap inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-[#9CA3AF] hover:text-[#F7F8F8] hover:bg-white/[0.04] border border-transparent"><i data-lucide="package" class="w-3.5 h-3.5"></i><span>Asset Tracker</span></button>
       <button id="tab-kitchen" onclick="switchTab('kitchen')" class="shrink-0 whitespace-nowrap inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-[#9CA3AF] hover:text-[#F7F8F8] hover:bg-white/[0.04] border border-transparent"><i data-lucide="utensils" class="w-3.5 h-3.5"></i><span>Kitchen Matrix</span></button>
       <button id="tab-trainer" onclick="switchTab('trainer')" class="shrink-0 whitespace-nowrap inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-[#9CA3AF] hover:text-[#F7F8F8] hover:bg-white/[0.04] border border-transparent"><i data-lucide="dumbbell" class="w-3.5 h-3.5"></i><span>Physical Trainer</span></button>
-      <button id="tab-friction" onclick="switchTab('friction')" class="shrink-0 whitespace-nowrap inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-[#9CA3AF] hover:text-[#F7F8F8] hover:bg-white/[0.04] border border-transparent"><i data-lucide="car" class="w-3.5 h-3.5"></i><span>Friction &amp; Debt</span></button>
-      <button id="tab-assistant" onclick="switchTab('assistant')" class="shrink-0 whitespace-nowrap inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-[#9CA3AF] hover:text-[#F7F8F8] hover:bg-white/[0.04] border border-transparent"><i data-lucide="sparkles" class="w-3.5 h-3.5 text-amber-400"></i><span>AI Assistant</span></button>
+      <button id="tab-friction" onclick="switchTab('friction')" class="shrink-0 whitespace-nowrap inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-[#9CA3AF] hover:text-[#F7F8F8] hover:bg-white/[0.04] border border-transparent"><i data-lucide="landmark" class="w-3.5 h-3.5"></i><span>Debt Tracker</span></button>
+      <button id="tab-assistant" onclick="switchTab('assistant')" class="shrink-0 whitespace-nowrap inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-[#9CA3AF] hover:text-[#F7F8F8] hover:bg-white/[0.04] border border-transparent"><i data-lucide="bot" class="w-3.5 h-3.5"></i><span>AI Assistant</span></button>
       <button id="tab-resolve" onclick="switchTab('resolve')" class="shrink-0 whitespace-nowrap inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-[#9CA3AF] hover:text-[#F7F8F8] hover:bg-white/[0.04] border border-transparent">
         <i data-lucide="git-merge" class="w-3.5 h-3.5"></i>
         <span>Resolve Duplicates</span>
@@ -1085,44 +1152,97 @@
               <tbody id="monthly-cat-tbody" class="divide-y divide-slate-800/70"></tbody>
             </table>
           </div>
+      <!-- Assistant AI Chat / Q&A History Modal -->
+      <div id="assistant-chat-modal" class="hidden fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4" onclick="if (event.target === this) closeAssistantChatHistory()">
+        <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-2xl w-full max-h-[86vh] flex flex-col shadow-2xl overflow-hidden">
+          <div class="flex items-center justify-between gap-3 px-5 py-3.5 border-b border-slate-800">
+            <div class="flex items-center gap-2">
+              <h3 class="text-sm font-bold text-white">AI Chat &amp; Q&amp;A History</h3>
+              <span id="as-chat-modal-count" class="text-[11px] px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 font-semibold">0</span>
+            </div>
+            <button type="button" onclick="closeAssistantChatHistory()" class="text-slate-400 hover:text-white text-xl leading-none px-1">&times;</button>
+          </div>
+          <div id="as-chat-history-body" class="p-4 space-y-4 overflow-y-auto flex-1 bg-slate-950/60"></div>
         </div>
       </div>
     </section>
 
     <!-- 2. ASSET TRACKER -->
-    <section id="panel-assets" class="hidden space-y-5">
-      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-900 border border-slate-800 rounded-2xl p-4">
-        <div>
-          <h2 class="text-base font-semibold">Hardware &amp; Collectibles Liquid Valuation</h2>
-          <p class="text-xs text-slate-400">Median Carousell cash value with standard-deviation outlier filtering.</p>
-        </div>
-        <div class="flex gap-2">
-          <button onclick="document.getElementById('add-asset-drawer').classList.toggle('hidden')" class="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-emerald-300">
-            + Track Asset
+    <section id="panel-assets" class="hidden space-y-3">
+      <div class="flex flex-wrap items-center justify-between gap-2 bg-[#111216] border border-white/[0.07] rounded-xl p-3">
+        <h2 class="text-sm font-semibold text-[#F7F8F8]">Asset Tracker</h2>
+        <div class="flex items-center gap-1.5">
+          <button type="button" onclick="document.getElementById('add-asset-drawer').classList.toggle('hidden')" class="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-[#1E1F25] hover:bg-[#272932] border border-white/[0.08] text-xs font-medium text-emerald-300">
+            <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+            <span>Asset</span>
           </button>
-          <button onclick="scrapeAllAssets()" id="scrape-all-btn" class="px-4 py-2 rounded-lg bg-sky-600 hover:bg-sky-500 text-xs font-semibold text-white">
-            Scrape Carousell Now
+          <button type="button" onclick="refreshAllAssets()" id="refresh-all-assets-btn" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#5E6AD2] hover:bg-[#6E7AE2] text-xs font-medium text-white">
+            <i data-lucide="sparkles" class="w-3.5 h-3.5"></i>
+            <span>AI Price Check</span>
           </button>
         </div>
       </div>
 
-      <form id="add-asset-drawer" onsubmit="addAsset(event)" class="hidden bg-slate-900 border border-slate-800 rounded-2xl p-4 grid grid-cols-1 md:grid-cols-6 gap-3 items-end">
-        <div class="md:col-span-2">
-          <label class="block text-xs text-slate-400 mb-1">Asset Name</label>
-          <input id="a-name" type="text" placeholder="e.g. Yonex Arcsaber 11 Pro" required class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs" />
-        </div>
-        <div class="md:col-span-2">
-          <label class="block text-xs text-slate-400 mb-1">Carousell Search Query</label>
-          <input id="a-query" type="text" placeholder="e.g. yonex arcsaber 11 pro" required class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs" />
+      <form id="add-asset-drawer" onsubmit="addAsset(event)" class="hidden bg-[#111216] border border-white/[0.07] rounded-xl p-3 grid grid-cols-1 sm:grid-cols-6 gap-2 items-end">
+        <div class="sm:col-span-2">
+          <label class="block text-[11px] text-[#8E96A4] mb-1">Asset Name</label>
+          <input id="a-name" type="text" placeholder="e.g. Moza R3 Racing Wheel" required class="w-full bg-[#0B0C0E] border border-white/[0.1] rounded-lg px-2.5 py-1.5 text-xs" />
         </div>
         <div>
-          <label class="block text-xs text-slate-400 mb-1">Purchase Price (RM)</label>
-          <input id="a-price" type="number" step="0.01" min="0" value="0" required class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs" />
+          <label class="block text-[11px] text-[#8E96A4] mb-1">Condition</label>
+          <select id="a-condition" class="w-full bg-[#0B0C0E] border border-white/[0.1] rounded-lg px-2 py-1.5 text-xs text-[#F7F8F8]">
+            <option value="Used">Used</option>
+            <option value="Used - Mint">Used - Mint</option>
+            <option value="Sealed">Sealed</option>
+            <option value="New">New</option>
+          </select>
         </div>
-        <button type="submit" class="py-2 px-4 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-xs font-semibold">Save Asset</button>
+        <div>
+          <label class="block text-[11px] text-[#8E96A4] mb-1">Cost (RM)</label>
+          <input id="a-price" type="number" step="0.01" min="0" value="0" required class="w-full bg-[#0B0C0E] border border-white/[0.1] rounded-lg px-2.5 py-1.5 text-xs" />
+        </div>
+        <div>
+          <label class="block text-[11px] text-[#8E96A4] mb-1">Search Hint</label>
+          <input id="a-query" type="text" placeholder="Optional" class="w-full bg-[#0B0C0E] border border-white/[0.1] rounded-lg px-2.5 py-1.5 text-xs" />
+        </div>
+        <button type="submit" class="py-1.5 px-3 rounded-lg bg-[#5E6AD2] hover:bg-[#6E7AE2] text-xs font-medium text-white">Save</button>
       </form>
 
-      <div id="assets-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+      <div id="assets-grid" class="assets-compact-grid"></div>
+
+      <!-- Vehicle Driving Cost & Consumables / Gear Wear (Integrated into Asset Tracker) -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-3">
+        <div class="asset-utility-card bg-[#111216] border border-white/[0.07] rounded-xl p-3 space-y-2">
+          <div class="flex items-center justify-between gap-2">
+            <h3 class="font-semibold text-[#F7F8F8] inline-flex items-center gap-1.5">
+              <i data-lucide="car" class="w-3.5 h-3.5 text-[#818CF8]"></i>
+              <span>Toyota Altis</span>
+            </h3>
+            <span id="altis-cpk" class="text-sm font-bold font-mono-num text-amber-400">—</span>
+          </div>
+          <div id="altis-stats" class="text-[11px] text-[#8E96A4]"></div>
+          <form onsubmit="logOdometer(event)" class="flex gap-1.5">
+            <input id="f-odo" type="number" step="0.1" min="0" placeholder="Odometer (km)" required class="flex-1 bg-[#0B0C0E] border border-white/[0.1] rounded-lg px-2.5 py-1.5 text-xs" />
+            <button type="submit" class="px-3 py-1.5 rounded-lg bg-[#5E6AD2] hover:bg-[#6E7AE2] text-xs font-medium text-white">Log</button>
+          </form>
+          <div id="odometer-list" class="space-y-1 text-[11px] max-h-20 overflow-y-auto"></div>
+        </div>
+        <div class="asset-utility-card bg-[#111216] border border-white/[0.07] rounded-xl p-3 space-y-2">
+          <h3 class="font-semibold text-[#F7F8F8]">Gear Wear</h3>
+          <div id="gear-list" class="grid grid-cols-1 sm:grid-cols-2 gap-2"></div>
+      <!-- Assistant AI Chat / Q&A History Modal -->
+      <div id="assistant-chat-modal" class="hidden fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4" onclick="if (event.target === this) closeAssistantChatHistory()">
+        <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-2xl w-full max-h-[86vh] flex flex-col shadow-2xl overflow-hidden">
+          <div class="flex items-center justify-between gap-3 px-5 py-3.5 border-b border-slate-800">
+            <div class="flex items-center gap-2">
+              <h3 class="text-sm font-bold text-white">AI Chat &amp; Q&amp;A History</h3>
+              <span id="as-chat-modal-count" class="text-[11px] px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 font-semibold">0</span>
+            </div>
+            <button type="button" onclick="closeAssistantChatHistory()" class="text-slate-400 hover:text-white text-xl leading-none px-1">&times;</button>
+          </div>
+          <div id="as-chat-history-body" class="p-4 space-y-4 overflow-y-auto flex-1 bg-slate-950/60"></div>
+        </div>
+      </div>
     </section>
 
     <!-- 3. KITCHEN MATRIX -->
@@ -1275,6 +1395,17 @@
             <h4 class="text-xs font-semibold text-slate-300 uppercase tracking-wider">Past Meals &amp; Taste Log</h4>
             <div id="taste-feedback-log" class="space-y-1.5 max-h-48 overflow-y-auto text-xs"></div>
           </div>
+      <!-- Assistant AI Chat / Q&A History Modal -->
+      <div id="assistant-chat-modal" class="hidden fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4" onclick="if (event.target === this) closeAssistantChatHistory()">
+        <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-2xl w-full max-h-[86vh] flex flex-col shadow-2xl overflow-hidden">
+          <div class="flex items-center justify-between gap-3 px-5 py-3.5 border-b border-slate-800">
+            <div class="flex items-center gap-2">
+              <h3 class="text-sm font-bold text-white">AI Chat &amp; Q&amp;A History</h3>
+              <span id="as-chat-modal-count" class="text-[11px] px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 font-semibold">0</span>
+            </div>
+            <button type="button" onclick="closeAssistantChatHistory()" class="text-slate-400 hover:text-white text-xl leading-none px-1">&times;</button>
+          </div>
+          <div id="as-chat-history-body" class="p-4 space-y-4 overflow-y-auto flex-1 bg-slate-950/60"></div>
         </div>
       </div>
     </section>
@@ -1330,44 +1461,164 @@
       </div>
     </section>
 
-    <!-- 5. FRICTION & SOCIAL DEBT -->
+    <!-- 5. DEBT TRACKER -->
     <section id="panel-friction" class="hidden space-y-5">
-      <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-3">
-          <div class="flex items-center justify-between">
-            <h3 class="text-base font-semibold">Toyota Altis — Driving Cost / KM</h3>
-            <span id="altis-cpk" class="text-lg font-bold text-amber-400">Need 2+ odometer logs</span>
+      <!-- Interactive Interest & Loan Calculator -->
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div>
+            <h2 class="text-base font-semibold text-white">Interest Rate &amp; Principal Calculator</h2>
+            <p class="text-xs text-slate-400">Compare Reducing Balance vs. Flat Rate loans, effective APR, and full amortization schedule.</p>
           </div>
-          <div id="altis-stats" class="text-xs text-slate-400"></div>
-          <form onsubmit="logOdometer(event)" class="flex gap-2">
-            <input id="f-odo" type="number" step="0.1" min="0" placeholder="Odometer (km), e.g. 84250" required class="flex-1 bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs" />
-            <button type="submit" class="px-4 py-2 rounded-lg bg-sky-600 hover:bg-sky-500 text-xs font-semibold">Log Odometer</button>
-          </form>
-          <div id="odometer-list" class="space-y-1 text-xs max-h-28 overflow-y-auto"></div>
+          <button type="button" onclick="applyCalcToDebtForm()" class="px-3 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-xs font-semibold text-white self-start">Use in Loan Form ↓</button>
         </div>
-        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-3">
-          <h3 class="text-base font-semibold">Consumables &amp; Gear Wear</h3>
-          <div id="gear-list" class="space-y-3"></div>
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+          <div>
+            <label class="block text-slate-400 mb-1">Principal (RM)</label>
+            <input id="calc-principal" type="number" step="0.01" min="1" value="2000" oninput="runLoanCalculator()" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono-num" />
+          </div>
+          <div>
+            <label class="block text-slate-400 mb-1">Interest Rate (% / yr)</label>
+            <input id="calc-rate" type="number" step="0.1" min="0" max="100" value="5.0" oninput="runLoanCalculator()" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono-num" />
+          </div>
+          <div>
+            <label class="block text-slate-400 mb-1">Tenure (Months)</label>
+            <input id="calc-tenure" type="number" step="1" min="1" max="600" value="24" oninput="runLoanCalculator()" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono-num" />
+          </div>
+          <div>
+            <label class="block text-slate-400 mb-1">Interest Type</label>
+            <select id="calc-type" onchange="runLoanCalculator()" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white">
+              <option value="reducing">Reducing Balance</option>
+              <option value="flat">Flat Rate</option>
+              <option value="none">0% Interest-Free</option>
+            </select>
+          </div>
         </div>
+        <div id="calc-results-grid" class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs"></div>
+        <details class="text-xs">
+          <summary class="cursor-pointer text-sky-400 hover:text-sky-300 font-medium">View Month-by-Month Principal &amp; Interest Schedule</summary>
+          <div class="mt-2 max-h-52 overflow-y-auto border border-slate-800 rounded-xl">
+            <table class="w-full text-left font-mono-num">
+              <thead class="bg-slate-950 text-slate-400 sticky top-0">
+                <tr><th class="p-2">Mo</th><th class="p-2 text-right">Payment</th><th class="p-2 text-right">Principal</th><th class="p-2 text-right">Interest</th><th class="p-2 text-right">Balance</th></tr>
+              </thead>
+              <tbody id="calc-schedule-body" class="divide-y divide-slate-800/70"></tbody>
+            </table>
+          </div>
+        </details>
       </div>
 
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <form onsubmit="parseTngSplit(event)" class="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-3">
-          <h3 class="text-sm font-semibold">Parse TNG Split Bill</h3>
-          <input id="d-event" type="text" value="San Guo Sha Night" required class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs" />
-          <textarea id="d-raw" rows="4" placeholder="Alex RM 28.50&#10;Jason RM 28.50" required class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs"></textarea>
-          <button type="submit" class="w-full py-2 rounded-lg bg-rose-600 hover:bg-rose-500 text-xs font-semibold">Flag Friends Who Owe Me</button>
+        <form onsubmit="createDebtEntry(event)" class="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-3 self-start">
+          <h3 class="text-sm font-semibold text-white">Add Loan / Debt (Auto-Repay)</h3>
+          <p class="text-[11px] text-slate-400">Backfills past transfers from Start Date and auto-detects future monthly payments.</p>
+          <select id="debt-dir" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white">
+            <option value="i_owe">I Borrowed (I Owe Someone)</option>
+            <option value="owed_to_me">They Borrowed (Owed to Me)</option>
+          </select>
+          <input id="debt-person" type="text" placeholder="Person / Bank (e.g. Lim Shu Ting)" required class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white" />
+          <input id="debt-event" type="text" placeholder="Reason (e.g. Personal Loan)" required class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white" />
+          <div class="grid grid-cols-2 gap-2">
+            <div><label class="block text-[10px] text-slate-400 mb-0.5">Principal (RM)</label><input id="debt-amt" type="number" step="0.01" min="0.01" placeholder="2000" required class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white" /></div>
+            <div><label class="block text-[10px] text-slate-400 mb-0.5">Monthly (RM, opt)</label><input id="debt-monthly" type="number" step="0.01" min="0.01" placeholder="83.40" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white" /></div>
+          </div>
+          <div class="grid grid-cols-3 gap-2">
+            <div>
+              <label class="block text-[10px] text-slate-400 mb-0.5">Int. Type</label>
+              <select id="debt-int-type" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white">
+                <option value="none">0% None</option>
+                <option value="reducing">Reducing</option>
+                <option value="flat">Flat</option>
+              </select>
+            </div>
+            <div><label class="block text-[10px] text-slate-400 mb-0.5">Rate %/yr</label><input id="debt-rate" type="number" step="0.1" min="0" value="0" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white" /></div>
+            <div><label class="block text-[10px] text-slate-400 mb-0.5">Tenure (mo)</label><input id="debt-tenure" type="number" step="1" min="1" placeholder="24" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white" /></div>
+          </div>
+          <div class="grid grid-cols-2 gap-2">
+            <div><label class="block text-[10px] text-slate-400 mb-0.5">Start Date (Backfill)</label><input id="debt-start" type="date" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white" /></div>
+            <div><label class="block text-[10px] text-slate-400 mb-0.5">Due Day (1–31)</label><input id="debt-due" type="number" min="1" max="31" placeholder="e.g. 25" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white" /></div>
+          </div>
+          <input id="debt-kw" type="text" placeholder="Auto-match keywords (defaults to name)" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white" />
+          <label class="flex items-center gap-2 text-xs text-slate-300">
+            <input id="debt-match-amt" type="checkbox" class="rounded bg-slate-950 border-slate-700" />
+            <span>Only match near monthly amount (±5%)</span>
+          </label>
+          <button type="submit" class="w-full py-2 rounded-lg bg-amber-600 hover:bg-amber-500 text-xs font-semibold text-white">Track Debt &amp; Auto-Repay</button>
         </form>
         <div class="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-3">
-          <h3 class="text-sm font-semibold">Active IOUs &amp; Settled History</h3>
-          <div id="debts-list" class="space-y-2 text-xs"></div>
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <h3 class="text-sm font-semibold">Debts, Loans &amp; Auto-Matched Repayments</h3>
+            <div id="debt-totals-pill" class="text-xs font-mono-num text-slate-300"></div>
+          </div>
+          <p class="text-[11px] text-slate-400">Click any debt card to inspect payment history, exclude false matches, edit terms, or view its amortization schedule.</p>
+          <div id="debts-list" class="space-y-2.5 text-xs"></div>
+        </div>
+      </div>
+
+      <!-- Debt Detail / Edit / Amortization Modal -->
+      <div id="debt-detail-modal" class="hidden fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4" onclick="if (event.target === this) closeDebtModal()">
+        <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-2xl w-full max-h-[88vh] overflow-y-auto p-5 space-y-4 shadow-2xl text-xs">
+          <div class="flex items-start justify-between gap-2">
+            <div>
+              <h3 id="dm-title" class="text-base font-bold text-white"></h3>
+              <p id="dm-sub" class="text-slate-400 mt-0.5"></p>
+            </div>
+            <button onclick="closeDebtModal()" class="text-slate-400 hover:text-white text-xl leading-none">&times;</button>
+          </div>
+          <div id="dm-stats" class="grid grid-cols-2 sm:grid-cols-4 gap-2"></div>
+          <div class="space-y-1.5">
+            <div class="font-semibold text-emerald-400 uppercase tracking-wider text-[11px]">Auto-Matched Payments</div>
+            <div id="dm-matches" class="space-y-1 max-h-40 overflow-y-auto"></div>
+          </div>
+          <div id="dm-sched-wrap" class="hidden space-y-1.5">
+            <div class="font-semibold text-sky-400 uppercase tracking-wider text-[11px]">Amortization Schedule</div>
+            <div class="max-h-44 overflow-y-auto border border-slate-800 rounded-xl">
+              <table class="w-full text-left font-mono-num">
+                <thead class="bg-slate-950 text-slate-400 sticky top-0">
+                  <tr><th class="p-2">Mo</th><th class="p-2 text-right">Payment</th><th class="p-2 text-right">Principal</th><th class="p-2 text-right">Interest</th><th class="p-2 text-right">Balance</th></tr>
+                </thead>
+                <tbody id="dm-sched-body" class="divide-y divide-slate-800/70"></tbody>
+              </table>
+            </div>
+          </div>
+          <form onsubmit="saveDebtEdit(event)" class="pt-3 border-t border-slate-800 space-y-2.5">
+            <div class="font-semibold text-amber-300 uppercase tracking-wider text-[11px]">Edit Loan / Auto-Match Settings</div>
+            <div class="grid grid-cols-2 gap-2">
+              <input id="dm-edit-person" type="text" required placeholder="Person" class="bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-white" />
+              <input id="dm-edit-event" type="text" required placeholder="Reason" class="bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-white" />
+              <input id="dm-edit-amt" type="number" step="0.01" min="0.01" required placeholder="Principal RM" class="bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-white" />
+              <input id="dm-edit-monthly" type="number" step="0.01" min="0.01" placeholder="Monthly RM" class="bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-white" />
+              <input id="dm-edit-start" type="date" class="bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-white" />
+              <input id="dm-edit-due" type="number" min="1" max="31" placeholder="Due day (1-31)" class="bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-white" />
+            </div>
+            <input id="dm-edit-kw" type="text" placeholder="Auto-match keywords" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-white" />
+            <label class="flex items-center gap-2 text-slate-300">
+              <input id="dm-edit-match-amt" type="checkbox" class="rounded bg-slate-950 border-slate-700" />
+              <span>Only match near monthly amount (±5%)</span>
+            </label>
+            <div class="flex justify-end gap-2">
+              <button type="button" onclick="closeDebtModal()" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300">Close</button>
+              <button type="submit" class="px-4 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-500 text-white font-semibold">Save Changes</button>
+            </div>
+          </form>
+      <!-- Assistant AI Chat / Q&A History Modal -->
+      <div id="assistant-chat-modal" class="hidden fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4" onclick="if (event.target === this) closeAssistantChatHistory()">
+        <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-2xl w-full max-h-[86vh] flex flex-col shadow-2xl overflow-hidden">
+          <div class="flex items-center justify-between gap-3 px-5 py-3.5 border-b border-slate-800">
+            <div class="flex items-center gap-2">
+              <h3 class="text-sm font-bold text-white">AI Chat &amp; Q&amp;A History</h3>
+              <span id="as-chat-modal-count" class="text-[11px] px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 font-semibold">0</span>
+            </div>
+            <button type="button" onclick="closeAssistantChatHistory()" class="text-slate-400 hover:text-white text-xl leading-none px-1">&times;</button>
+          </div>
+          <div id="as-chat-history-body" class="p-4 space-y-4 overflow-y-auto flex-1 bg-slate-950/60"></div>
         </div>
       </div>
     </section>
 
     <!-- 5.5 RESOLVE DUPLICATES / BANK GLITCHES -->
     <!-- 5B. AI PERSONAL ASSISTANT & WHATSAPP INBOX -->
-    <section id="panel-assistant" class="hidden space-y-5">
+    <section id="panel-assistant" class="hidden space-y-5 pb-28">
       <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-3">
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div>
@@ -1376,6 +1627,7 @@
           </div>
           <div class="flex items-center gap-2">
             <span id="assistant-briefing-engine" class="text-xs px-2.5 py-0.5 rounded-full bg-slate-800 text-slate-300"></span>
+            <button onclick="sendBriefingToWhatsApp()" id="as-wa-send-btn" class="text-xs px-3 py-1.5 rounded-lg bg-emerald-600/80 hover:bg-emerald-500 text-white font-semibold">Send to WhatsApp</button>
             <button onclick="loadAssistant()" class="text-xs px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-sky-300 font-medium">Refresh Plan</button>
           </div>
         </div>
@@ -1383,27 +1635,72 @@
         <div id="assistant-expiring-alert" class="hidden text-xs text-amber-300 bg-amber-950/30 border border-amber-500/20 rounded-xl px-3 py-2"></div>
       </div>
 
-      <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <form onsubmit="ingestAssistantManual(event)" class="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-3">
-          <h3 class="text-sm font-semibold text-white">Forward / Think / Plan</h3>
-          <p class="text-xs text-slate-400">Paste a forwarded WhatsApp message, idea, or schedule. (WhatsApp Bridge posts here automatically.)</p>
-          <textarea id="as-raw" rows="4" required placeholder="e.g. Dinner with Alex tomorrow 8pm at Bangsar, or Buy tomato and chicken" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-100"></textarea>
-          <input id="as-sender" type="text" placeholder="From (default: Me)" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-100" />
-          <button id="as-submit-btn" type="submit" class="w-full py-2 rounded-lg bg-amber-600 hover:bg-amber-500 text-xs font-semibold text-white">Think &amp; Plan</button>
-        </form>
-
-        <div class="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-3">
-          <div class="flex items-center justify-between">
-            <h3 class="text-sm font-semibold text-white">Planned &amp; Scheduled Inbox</h3>
-            <select id="as-status-filter" onchange="loadAssistant()" class="bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1 text-xs text-slate-200">
-              <option value="pending">Pending</option>
-              <option value="done">Completed</option>
-              <option value="">All</option>
-            </select>
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 items-start">
+        <div class="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <h3 class="text-sm font-semibold text-white">Daily Schedule &amp; To-Do</h3>
+            <div class="flex items-center gap-2">
+              <div class="inline-flex rounded-lg bg-slate-950 border border-slate-700 p-0.5 text-xs">
+                <button type="button" id="as-btn-list" onclick="switchAssistantView('list')" class="px-2.5 py-1 rounded-md bg-amber-600 text-white font-semibold">List</button>
+                <button type="button" id="as-btn-calendar" onclick="switchAssistantView('calendar')" class="px-2.5 py-1 rounded-md text-slate-400 hover:text-white">Calendar</button>
+              </div>
+              <select id="as-cat-filter" onchange="renderAssistantViews()" class="bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1 text-xs text-slate-200">
+                <option value="">All Categories</option>
+                <option value="planning">Planning</option>
+                <option value="schedule">Schedule</option>
+                <option value="pay">Pay</option>
+                <option value="question">Question / Math</option>
+                <option value="bank_statement">Bank Statement</option>
+                <option value="kitchen">Kitchen</option>
+                <option value="task">Task</option>
+                <option value="idea">Idea</option>
+                <option value="expense">Expense</option>
+              </select>
+              <select id="as-status-filter" onchange="loadAssistant()" class="bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1 text-xs text-slate-200">
+                <option value="pending">Pending</option>
+                <option value="done">Completed</option>
+                <option value="">All</option>
+              </select>
+            </div>
           </div>
-          <div id="assistant-items-list" class="space-y-2.5 max-h-[460px] overflow-y-auto"></div>
+          <div id="assistant-items-list" class="space-y-3 max-h-[600px] overflow-y-auto pr-1"></div>
+          <div id="assistant-calendar-wrap" class="hidden space-y-3">
+            <div class="flex items-center justify-between">
+              <button type="button" onclick="stepAssistantCalMonth(-1)" class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs text-slate-200">&larr;</button>
+              <div id="as-cal-month-label" class="text-sm font-bold text-white"></div>
+              <button type="button" onclick="stepAssistantCalMonth(1)" class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs text-slate-200">&rarr;</button>
+            </div>
+            <div class="grid grid-cols-7 gap-1 text-[10px] text-center text-slate-400 font-semibold">
+              <div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div><div>Sun</div>
+            </div>
+            <div id="as-cal-grid" class="grid grid-cols-7 gap-1.5 text-xs"></div>
+            <div class="pt-2 border-t border-slate-800 space-y-2">
+              <div id="as-cal-day-title" class="text-sm font-bold text-amber-300"></div>
+              <div id="as-cal-day-items" class="space-y-2 max-h-60 overflow-y-auto"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-3">
+          <div class="flex items-center justify-between gap-2">
+            <h3 class="text-sm font-semibold text-white">Unscheduled / Anytime</h3>
+            <div class="flex items-center gap-1.5">
+              <button type="button" id="as-chat-history-btn" onclick="openAssistantChatHistory()" class="inline-flex items-center gap-1 text-[11px] px-2.5 py-0.5 rounded-full bg-indigo-500/20 hover:bg-indigo-500/35 border border-indigo-400/30 text-indigo-200 font-medium transition">
+                <span>💬 Chats</span>
+                <span id="as-chat-count" class="px-1.5 py-0 rounded-full bg-indigo-500/40 text-[10px] text-white font-semibold">0</span>
+              </button>
+              <span id="as-unsched-count" class="text-[11px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-300">0</span>
+            </div>
+          </div>
+          <div id="assistant-unscheduled-list" class="space-y-2.5 max-h-[600px] overflow-y-auto pr-1"></div>
         </div>
       </div>
+
+      <!-- Floating Bottom-Center Quick Think & Plan Bar -->
+      <form onsubmit="ingestAssistantManual(event)" class="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 w-[92vw] max-w-2xl bg-slate-900/95 backdrop-blur-md border border-slate-700/80 rounded-2xl shadow-2xl p-2 flex items-center gap-2">
+        <input id="as-raw" type="text" required placeholder="Ask a question, solve math, paste a message to interpret, pay a bill, or plan..." class="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-xs text-slate-100 focus:outline-none focus:border-amber-500/60" />
+        <button id="as-submit-btn" type="submit" class="shrink-0 px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-xs font-semibold text-white">Think &amp; Plan</button>
+      </form>
 
       <!-- Assistant Item Detail Modal -->
       <div id="assistant-detail-modal" class="hidden fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4" onclick="if (event.target === this) closeAssistantModal()">
@@ -1416,7 +1713,7 @@
             <button onclick="closeAssistantModal()" class="text-slate-400 hover:text-white text-xl leading-none px-1">&times;</button>
           </div>
           <div class="space-y-1">
-            <div class="text-[11px] font-semibold uppercase tracking-wider text-emerald-400">AI Plan &amp; Thinking</div>
+            <div id="as-modal-plan-label" class="text-[11px] font-semibold uppercase tracking-wider text-emerald-400">AI Plan &amp; Thinking</div>
             <pre id="as-modal-plan" class="text-xs text-slate-200 whitespace-pre-wrap font-sans bg-slate-950 border border-slate-800 rounded-xl p-3"></pre>
           </div>
           <div id="as-modal-img-wrap" class="hidden space-y-1">
@@ -1434,6 +1731,31 @@
               <button onclick="deleteActiveAssistantItem()" class="text-xs px-3 py-1.5 rounded-lg bg-rose-700/70 hover:bg-rose-600 text-white font-semibold">Delete</button>
             </div>
           </div>
+      <!-- Assistant AI Chat / Q&A History Modal -->
+      <div id="assistant-chat-modal" class="hidden fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4" onclick="if (event.target === this) closeAssistantChatHistory()">
+        <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-2xl w-full max-h-[86vh] flex flex-col shadow-2xl overflow-hidden">
+          <div class="flex items-center justify-between gap-3 px-5 py-3.5 border-b border-slate-800">
+            <div class="flex items-center gap-2">
+              <h3 class="text-sm font-bold text-white">AI Chat &amp; Q&amp;A History</h3>
+              <span id="as-chat-modal-count" class="text-[11px] px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 font-semibold">0</span>
+            </div>
+            <button type="button" onclick="closeAssistantChatHistory()" class="text-slate-400 hover:text-white text-xl leading-none px-1">&times;</button>
+          </div>
+          <div id="as-chat-history-body" class="p-4 space-y-4 overflow-y-auto flex-1 bg-slate-950/60"></div>
+        </div>
+      </div>
+
+      <!-- Assistant AI Chat / Q&A History Modal -->
+      <div id="assistant-chat-modal" class="hidden fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4" onclick="if (event.target === this) closeAssistantChatHistory()">
+        <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-2xl w-full max-h-[86vh] flex flex-col shadow-2xl overflow-hidden">
+          <div class="flex items-center justify-between gap-3 px-5 py-3.5 border-b border-slate-800">
+            <div class="flex items-center gap-2">
+              <h3 class="text-sm font-bold text-white">AI Chat &amp; Q&amp;A History</h3>
+              <span id="as-chat-modal-count" class="text-[11px] px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 font-semibold">0</span>
+            </div>
+            <button type="button" onclick="closeAssistantChatHistory()" class="text-slate-400 hover:text-white text-xl leading-none px-1">&times;</button>
+          </div>
+          <div id="as-chat-history-body" class="p-4 space-y-4 overflow-y-auto flex-1 bg-slate-950/60"></div>
         </div>
       </div>
     </section>
@@ -1459,6 +1781,122 @@
 
     <!-- 6. SETTINGS & INBOX CONFIGURATION -->
     <section id="panel-settings" class="hidden space-y-6">
+      <!-- Visible Navigation Tabs -->
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-3">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div>
+            <h2 class="text-base font-semibold text-white">Visible Navigation Tabs</h2>
+            <p class="text-xs text-slate-400">Choose which tabs are shown in the top bar (Settings is always kept visible).</p>
+          </div>
+          <button type="button" onclick="resetVisibleTabs()" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs text-slate-300 self-start">Show All Tabs</button>
+        </div>
+        <div class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2 text-xs">
+          <label class="flex items-center gap-2 p-2.5 rounded-xl bg-slate-950 border border-slate-800 cursor-pointer hover:border-slate-700">
+            <input type="checkbox" class="vis-tab-chk rounded bg-slate-900 border-slate-700" value="wealth" onchange="saveVisibleTabs()" checked />
+            <span class="text-slate-200">Wealth Ledger</span>
+          </label>
+          <label class="flex items-center gap-2 p-2.5 rounded-xl bg-slate-950 border border-slate-800 cursor-pointer hover:border-slate-700">
+            <input type="checkbox" class="vis-tab-chk rounded bg-slate-900 border-slate-700" value="assets" onchange="saveVisibleTabs()" checked />
+            <span class="text-slate-200">Asset Tracker</span>
+          </label>
+          <label class="flex items-center gap-2 p-2.5 rounded-xl bg-slate-950 border border-slate-800 cursor-pointer hover:border-slate-700">
+            <input type="checkbox" class="vis-tab-chk rounded bg-slate-900 border-slate-700" value="kitchen" onchange="saveVisibleTabs()" checked />
+            <span class="text-slate-200">Kitchen Matrix</span>
+          </label>
+          <label class="flex items-center gap-2 p-2.5 rounded-xl bg-slate-950 border border-slate-800 cursor-pointer hover:border-slate-700">
+            <input type="checkbox" class="vis-tab-chk rounded bg-slate-900 border-slate-700" value="trainer" onchange="saveVisibleTabs()" checked />
+            <span class="text-slate-200">Physical Trainer</span>
+          </label>
+          <label class="flex items-center gap-2 p-2.5 rounded-xl bg-slate-950 border border-slate-800 cursor-pointer hover:border-slate-700">
+            <input type="checkbox" class="vis-tab-chk rounded bg-slate-900 border-slate-700" value="friction" onchange="saveVisibleTabs()" checked />
+            <span class="text-slate-200">Debt Tracker</span>
+          </label>
+          <label class="flex items-center gap-2 p-2.5 rounded-xl bg-slate-950 border border-slate-800 cursor-pointer hover:border-slate-700">
+            <input type="checkbox" class="vis-tab-chk rounded bg-slate-900 border-slate-700" value="assistant" onchange="saveVisibleTabs()" checked />
+            <span class="text-slate-200">AI Assistant</span>
+          </label>
+          <label class="flex items-center gap-2 p-2.5 rounded-xl bg-slate-950 border border-slate-800 cursor-pointer hover:border-slate-700">
+            <input type="checkbox" class="vis-tab-chk rounded bg-slate-900 border-slate-700" value="resolve" onchange="saveVisibleTabs()" checked />
+            <span class="text-slate-200">Resolve Duplicates</span>
+          </label>
+        </div>
+      </div>
+
+      <!-- AI Usage & Services Telemetry -->
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div>
+            <h2 class="text-base font-semibold text-white">AI Usage &amp; Services</h2>
+            <p class="text-xs text-slate-400">Tracks every call, token count, and rate-limit across Gemini, Groq, NVIDIA NIM, and Ollama.</p>
+          </div>
+          <div class="flex items-center gap-1.5">
+            <select id="ai-usage-days" onchange="loadAiUsage()" class="bg-slate-950 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-slate-200">
+              <option value="7">Last 7d</option>
+              <option value="30" selected>Last 30d</option>
+              <option value="90">Last 90d</option>
+            </select>
+            <button type="button" onclick="loadAiUsage()" class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs text-slate-200">Refresh</button>
+            <button type="button" onclick="clearAiUsageLogs()" class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-rose-900/60 text-xs text-rose-300">Clear</button>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-xs">
+          <button type="button" id="aiu-kpi-calls" onclick="toggleAiuSort('calls')" title="Click to sort by calls" class="text-left p-3 rounded-xl bg-slate-950 border border-slate-800 hover:border-slate-600 transition cursor-pointer">
+            <div class="flex items-center justify-between text-[11px] text-slate-400"><span>Total Calls</span><span data-sort-ind="calls" class="text-[#818CF8]"></span></div>
+            <div id="aiu-total-calls" class="text-base font-bold font-mono-num text-white mt-0.5">0</div>
+          </button>
+          <button type="button" id="aiu-kpi-today" onclick="toggleAiuSort('today')" title="Click to sort by remaining % / today usage" class="text-left p-3 rounded-xl bg-slate-950 border border-slate-800 hover:border-slate-600 transition cursor-pointer">
+            <div class="flex items-center justify-between text-[11px] text-slate-400"><span>Today</span><span data-sort-ind="today" class="text-[#818CF8]"></span></div>
+            <div id="aiu-today-calls" class="text-base font-bold font-mono-num text-sky-300 mt-0.5">0</div>
+          </button>
+          <button type="button" id="aiu-kpi-tokens" onclick="toggleAiuSort('tokens')" title="Click to sort by tokens" class="text-left p-3 rounded-xl bg-slate-950 border border-slate-800 hover:border-slate-600 transition cursor-pointer">
+            <div class="flex items-center justify-between text-[11px] text-slate-400"><span>Total Tokens</span><span data-sort-ind="tokens" class="text-[#818CF8]"></span></div>
+            <div id="aiu-total-tokens" class="text-base font-bold font-mono-num text-emerald-400 mt-0.5">0</div>
+          </button>
+          <button type="button" id="aiu-kpi-rate_limits" onclick="toggleAiuSort('rate_limits')" title="Click to sort by rate limits &amp; errors" class="text-left p-3 rounded-xl bg-slate-950 border border-slate-800 hover:border-slate-600 transition cursor-pointer">
+            <div class="flex items-center justify-between text-[11px] text-slate-400"><span>Rate Limits (429)</span><span data-sort-ind="rate_limits" class="text-[#818CF8]"></span></div>
+            <div id="aiu-rate-limits" class="text-base font-bold font-mono-num text-amber-400 mt-0.5">0</div>
+          </button>
+        </div>
+
+        <div id="aiu-providers-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5"></div>
+
+        <div class="space-y-2">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <div class="flex flex-wrap items-center gap-2">
+              <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-300">Models, Capabilities &amp; Quotas</h3>
+              <span id="aiu-filter-chip" class="hidden"></span>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="text-[11px] text-slate-400 hidden sm:inline">Half-circle = remaining quota · n/x resets per min or per day</span>
+              <button type="button" id="aiu-test-all-btn" onclick="testAllAiModels()" class="px-2.5 py-1 rounded-lg bg-[#5E6AD2] hover:bg-[#6E7AE2] text-[11px] font-semibold text-white">Test All</button>
+            </div>
+          </div>
+          <div id="aiu-models-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2.5"></div>
+        </div>
+
+        <div class="overflow-x-auto rounded-xl border border-slate-800 bg-slate-950">
+          <table class="w-full text-left text-xs">
+            <thead class="border-b border-slate-800 text-[11px] text-slate-400">
+              <tr>
+                <th class="px-3 py-2 font-medium">Service</th>
+                <th class="px-3 py-2 font-medium text-right">Calls</th>
+                <th class="px-3 py-2 font-medium text-right">OK / 429</th>
+                <th class="px-3 py-2 font-medium text-right">Tokens</th>
+                <th class="px-3 py-2 font-medium text-right">Avg ms</th>
+                <th class="px-3 py-2 font-medium">Last Model</th>
+              </tr>
+            </thead>
+            <tbody id="aiu-services-body" class="divide-y divide-slate-800/70"></tbody>
+          </table>
+        </div>
+
+        <details class="rounded-xl border border-slate-800 bg-slate-950 p-3">
+          <summary class="cursor-pointer text-xs font-medium text-slate-300 hover:text-white">Recent AI Calls (last 25)</summary>
+          <div id="aiu-recent-list" class="mt-2.5 space-y-1.5 max-h-64 overflow-y-auto text-[11px]"></div>
+        </details>
+      </div>
+
       <!-- WhatsApp Personal Assistant Listener (Option 1) -->
       <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -1821,6 +2259,17 @@
             </thead>
             <tbody id="security-audit-tbody" class="divide-y divide-slate-800"></tbody>
           </table>
+      <!-- Assistant AI Chat / Q&A History Modal -->
+      <div id="assistant-chat-modal" class="hidden fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4" onclick="if (event.target === this) closeAssistantChatHistory()">
+        <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-2xl w-full max-h-[86vh] flex flex-col shadow-2xl overflow-hidden">
+          <div class="flex items-center justify-between gap-3 px-5 py-3.5 border-b border-slate-800">
+            <div class="flex items-center gap-2">
+              <h3 class="text-sm font-bold text-white">AI Chat &amp; Q&amp;A History</h3>
+              <span id="as-chat-modal-count" class="text-[11px] px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 font-semibold">0</span>
+            </div>
+            <button type="button" onclick="closeAssistantChatHistory()" class="text-slate-400 hover:text-white text-xl leading-none px-1">&times;</button>
+          </div>
+          <div id="as-chat-history-body" class="p-4 space-y-4 overflow-y-auto flex-1 bg-slate-950/60"></div>
         </div>
       </div>
     </section>
@@ -2236,15 +2685,16 @@
         const dy = e.changedTouches[0].clientY - by0;
         bx0 = by0 = null;
         if (Math.abs(dx) > 90 && Math.abs(dx) > Math.abs(dy) * 2.0) {
-          const activeIdx = TAB_ORDER.findIndex((t) => {
+          const visibleOrder = TAB_ORDER.filter((t) => t === "settings" || !window._activeVisibleTabsSet || window._activeVisibleTabsSet.has(t));
+          const activeIdx = visibleOrder.findIndex((t) => {
             const p = document.getElementById(`panel-${t}`);
             return p && !p.classList.contains("hidden");
           });
           if (activeIdx === -1) return;
           const nextIdx = activeIdx + (dx < 0 ? 1 : -1);
-          if (nextIdx >= 0 && nextIdx < TAB_ORDER.length) {
-            switchTab(TAB_ORDER[nextIdx]);
-            const activeTabBtn = document.getElementById(`tab-${TAB_ORDER[nextIdx]}`);
+          if (nextIdx >= 0 && nextIdx < visibleOrder.length) {
+            switchTab(visibleOrder[nextIdx]);
+            const activeTabBtn = document.getElementById(`tab-${visibleOrder[nextIdx]}`);
             if (activeTabBtn) activeTabBtn.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
           }
         }
@@ -2272,6 +2722,10 @@
           <div id="${menuId}" onclick="event.stopPropagation()" class="action-popover hidden">
             ${isExpLinkable ? `<button type="button" onclick="closeAllActionMenus(); openLinkRepaymentsModal(${r.id})"><i data-lucide="link-2" class="w-3.5 h-3.5 text-[#818CF8]"></i><span>Link Repayments</span></button>` : ""}
             ${isRepLinkable ? `<button type="button" onclick="closeAllActionMenus(); openLinkExpenseForRepayment(${r.id})"><i data-lucide="link-2" class="w-3.5 h-3.5 text-[#818CF8]"></i><span>Link to Expense</span></button>` : ""}
+            <button type="button" onclick="closeAllActionMenus(); openSplitEntryModal(${r.id})">
+              <i data-lucide="scissors" class="w-3.5 h-3.5 text-[#34D399]"></i>
+              <span>Split Transaction</span>
+            </button>
             <button type="button" onclick="closeAllActionMenus(); toggleEntrySelfTransfer(${r.id}, ${!r.is_self_transfer})">
               <i data-lucide="arrow-left-right" class="w-3.5 h-3.5 text-[#818CF8]"></i>
               <span>${r.is_self_transfer ? "Unmark Self-Transfer" : "Mark Self-Transfer"}</span>
@@ -2311,6 +2765,9 @@
           const icon = btn.querySelector("svg, i, iconify-icon");
           if (icon) {
             icon.classList.toggle("text-[#818CF8]", isTarget);
+          }
+          if (t !== "settings" && window._activeVisibleTabsSet && !window._activeVisibleTabsSet.has(t)) {
+            btn.classList.add("hidden");
           }
         }
         const dock = document.getElementById("wealth-bottom-dock");
@@ -2355,7 +2812,472 @@
       const lastAt = s.last_auto_sync_at ? new Date(s.last_auto_sync_at).toLocaleString() : "Never";
       document.getElementById("auto-sync-status-line").textContent =
         `Last Auto-Sync: ${lastAt} · ${s.last_auto_sync_status}`;
-      await Promise.all([loadBankAccounts(), loadCategoryRules(), loadListenerStatus(), loadCategoryModelStatus()]);
+      applyVisibleTabs(s.visible_tabs);
+      await Promise.all([loadBankAccounts(), loadCategoryRules(), loadListenerStatus(), loadCategoryModelStatus(), loadAiUsage()]);
+    }
+
+    window._aiuProviderFilter = window._aiuProviderFilter || "";
+    window._aiuSortBy = window._aiuSortBy || "";
+    window._aiuSortDir = window._aiuSortDir || "desc";
+
+    function toggleAiuProviderFilter(prov) {
+      window._aiuProviderFilter = (window._aiuProviderFilter === prov) ? "" : prov;
+      if (window._aiUsageCache) renderAiUsageDashboard(window._aiUsageCache);
+    }
+
+    function toggleAiuSort(metric) {
+      if (window._aiuSortBy === metric) {
+        if (window._aiuSortDir === "desc") {
+          window._aiuSortDir = "asc";
+        } else {
+          window._aiuSortBy = "";
+          window._aiuSortDir = "desc";
+        }
+      } else {
+        window._aiuSortBy = metric;
+        window._aiuSortDir = "desc";
+      }
+      if (window._aiUsageCache) renderAiUsageDashboard(window._aiUsageCache);
+    }
+
+    function clearAiuFilters() {
+      window._aiuProviderFilter = "";
+      window._aiuSortBy = "";
+      window._aiuSortDir = "desc";
+      if (window._aiUsageCache) renderAiUsageDashboard(window._aiUsageCache);
+    }
+
+    async function loadAiUsage() {
+      const days = document.getElementById("ai-usage-days")?.value || "30";
+      const res = await fetch(`/api/settings/ai-usage?days=${encodeURIComponent(days)}`);
+      if (!res.ok) return;
+      const d = await res.json();
+      window._aiUsageCache = d;
+      renderAiUsageDashboard(d);
+    }
+
+    function renderAiUsageDashboard(d) {
+      const fmtNum = (n) => Number(n || 0).toLocaleString();
+      document.getElementById("aiu-total-calls").textContent = fmtNum(d.total_calls);
+      document.getElementById("aiu-today-calls").textContent = `${fmtNum(d.today_calls)} (${fmtNum(d.today_tokens)} tok)`;
+      document.getElementById("aiu-total-tokens").textContent = fmtNum(d.total_tokens);
+      document.getElementById("aiu-rate-limits").textContent = fmtNum(d.rate_limited_calls);
+
+      const sortBy = window._aiuSortBy;
+      const sortDir = window._aiuSortDir;
+      const dirSign = sortDir === "asc" ? 1 : -1;
+      for (const key of ["calls", "today", "tokens", "rate_limits"]) {
+        const kpiBtn = document.getElementById(`aiu-kpi-${key}`);
+        const ind = document.querySelector(`[data-sort-ind="${key}"]`);
+        const isActive = sortBy === key;
+        if (kpiBtn) {
+          kpiBtn.classList.toggle("border-[#818CF8]", isActive);
+          kpiBtn.classList.toggle("ring-1", isActive);
+          kpiBtn.classList.toggle("ring-[#818CF8]/40", isActive);
+          kpiBtn.classList.toggle("border-slate-800", !isActive);
+        }
+        if (ind) ind.textContent = isActive ? (sortDir === "desc" ? "↓" : "↑") : "";
+      }
+
+      const provs = [...(d.providers || [])];
+      if (sortBy) {
+        provs.sort((a, b) => {
+          const val = (p) => sortBy === "calls" ? p.calls
+            : sortBy === "today" ? p.today_calls
+            : sortBy === "tokens" ? p.total_tokens
+            : (p.rate_limited_calls * 1000 + p.error_calls);
+          return (val(a) - val(b)) * dirSign;
+        });
+      }
+
+      document.getElementById("aiu-providers-grid").innerHTML = provs.map((p) => {
+        const isSelected = window._aiuProviderFilter === p.provider;
+        const badge = p.configured
+          ? `<span class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-300">Ready</span>`
+          : `<span class="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400">No Key</span>`;
+        const modelsText = (p.models && p.models.length) ? _escTaste(p.models.join(", ")) : "No calls yet";
+        const borderCls = isSelected
+          ? "border-[#818CF8] ring-1 ring-[#818CF8]/40 bg-slate-900"
+          : "border-slate-800 bg-slate-950 hover:border-slate-600";
+        return `
+          <button type="button" onclick="toggleAiuProviderFilter('${_escTaste(p.provider)}')" title="Click to filter models by ${_escTaste(p.label)}" class="text-left p-3 rounded-xl border ${borderCls} space-y-1.5 text-xs transition cursor-pointer">
+            <div class="flex items-center justify-between gap-2">
+              <span class="font-semibold text-white truncate">${_escTaste(p.label)}</span>
+              ${badge}
+            </div>
+            <div class="flex items-baseline justify-between font-mono-num">
+              <span class="text-sm font-bold text-white">${fmtNum(p.calls)} calls</span>
+              <span class="text-[11px] text-emerald-400">${fmtNum(p.total_tokens)} tok</span>
+            </div>
+            <div class="text-[11px] text-slate-400 font-mono-num">Today: ${fmtNum(p.today_calls)} · 429: ${fmtNum(p.rate_limited_calls)} · Err: ${fmtNum(p.error_calls)}</div>
+            <div class="text-[10px] text-slate-500 truncate" title="${modelsText}">${modelsText}</div>
+          </button>`;
+      }).join("");
+
+      const svcBody = document.getElementById("aiu-services-body");
+      svcBody.innerHTML = (d.services && d.services.length)
+        ? d.services.map((s) => `
+          <tr>
+            <td class="px-3 py-2 text-slate-200">${_escTaste(s.label)}</td>
+            <td class="px-3 py-2 text-right font-mono-num text-white">${fmtNum(s.calls)}</td>
+            <td class="px-3 py-2 text-right font-mono-num"><span class="text-emerald-400">${fmtNum(s.success_calls)}</span> / <span class="${s.rate_limited_calls ? "text-amber-400" : "text-slate-500"}">${fmtNum(s.rate_limited_calls)}</span></td>
+            <td class="px-3 py-2 text-right font-mono-num text-slate-200">${fmtNum(s.total_tokens)}</td>
+            <td class="px-3 py-2 text-right font-mono-num text-slate-400">${fmtNum(s.avg_latency_ms)}</td>
+            <td class="px-3 py-2 font-mono-num text-[11px] text-slate-400 truncate max-w-[180px]" title="${_escTaste(s.last_model)}">${_escTaste(s.last_model || "—")}</td>
+          </tr>`).join("")
+        : `<tr><td colspan="6" class="px-3 py-4 text-center text-slate-500">No AI service calls recorded yet.</td></tr>`;
+
+      const filteredLogs = window._aiuProviderFilter
+        ? (d.recent_logs || []).filter((r) => r.provider === window._aiuProviderFilter)
+        : (d.recent_logs || []);
+      const recentEl = document.getElementById("aiu-recent-list");
+      recentEl.innerHTML = filteredLogs.length
+        ? filteredLogs.map((r) => {
+            const stCls = r.status === "ok"
+              ? "bg-emerald-500/15 text-emerald-300"
+              : r.status === "rate_limited"
+                ? "bg-amber-500/15 text-amber-300"
+                : "bg-rose-500/15 text-rose-300";
+            const ts = r.created_at ? new Date(r.created_at).toLocaleString() : "";
+            return `
+              <div class="flex flex-wrap items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-800">
+                <div class="flex items-center gap-2 min-w-0">
+                  <span class="px-1.5 py-0.5 rounded text-[10px] font-medium ${stCls}">${_escTaste(r.status)}</span>
+                  <span class="font-mono-num text-slate-200 truncate">${_escTaste(r.provider)}:${_escTaste(r.model)}</span>
+                  <span class="text-slate-400">${_escTaste(r.service)}</span>
+                  ${r.error_detail ? `<span class="text-rose-300 truncate">${_escTaste(r.error_detail)}</span>` : ""}
+                </div>
+                <div class="font-mono-num text-slate-400 shrink-0">${fmtNum(r.total_tokens)} tok · ${r.latency_ms}ms · ${ts}</div>
+              </div>`;
+          }).join("")
+        : `<div class="text-slate-500">No recent AI calls.</div>`;
+
+      renderAiModelQuotas(d.models || []);
+    }
+
+    let _aiuRefreshTimer = null;
+    function _fmtResetWindow(secs, period) {
+      const s = Math.max(0, Number(secs || 0));
+      if (period === "minute") return `${s}s`;
+      const h = Math.floor(s / 3600);
+      const m = Math.floor((s % 3600) / 60);
+      return h > 0 ? `${h}h ${m}m` : `${m}m`;
+    }
+
+    function _capBadgeHtml(cap) {
+      const map = {
+        text: ["Text", "bg-slate-800 text-slate-200"],
+        images: ["Images", "bg-sky-500/15 text-sky-300"],
+        web_search: ["Web Search", "bg-indigo-500/20 text-indigo-300"],
+        voice_notes: ["Voice Notes", "bg-amber-500/15 text-amber-300"],
+      };
+      const [label, cls] = map[cap] || [cap, "bg-slate-800 text-slate-300"];
+      return `<span class="px-1.5 py-0.5 rounded text-[10px] font-medium ${cls}">${_escTaste(label)}</span>`;
+    }
+
+    function renderAiModelQuotas(models) {
+      window._aiModelQuotasCache = models;
+      const provFilter = window._aiuProviderFilter || "";
+      const sortBy = window._aiuSortBy || "";
+      const dirSign = (window._aiuSortDir || "desc") === "asc" ? 1 : -1;
+
+      let visible = provFilter ? models.filter((m) => m.provider === provFilter) : [...models];
+      if (sortBy) {
+        const statusScore = (m) => m.last_status === "rate_limited" ? 2 : m.last_status === "error" ? 1 : 0;
+        visible.sort((a, b) => {
+          if (sortBy === "calls") return (a.used_calls - b.used_calls) * dirSign;
+          if (sortBy === "tokens") return (a.used_tokens - b.used_tokens) * dirSign;
+          if (sortBy === "today") return ((100 - a.remaining_pct) - (100 - b.remaining_pct)) * dirSign || (a.used_calls - b.used_calls) * dirSign;
+          if (sortBy === "rate_limits") return (statusScore(a) - statusScore(b)) * dirSign || (a.used_calls - b.used_calls) * dirSign;
+          return 0;
+        });
+      }
+      window._aiModelQuotasVisible = visible;
+
+      const chip = document.getElementById("aiu-filter-chip");
+      if (chip) {
+        const parts = [];
+        if (provFilter) parts.push(`Provider: ${provFilter}`);
+        if (sortBy) parts.push(`Sort: ${sortBy} ${dirSign === -1 ? "↓" : "↑"}`);
+        if (parts.length) {
+          chip.className = "inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-[#5E6AD2]/20 border border-[#818CF8]/40 text-[10px] text-[#A5B4FC]";
+          chip.innerHTML = `<span>${_escTaste(parts.join(" · "))}</span><button type="button" onclick="clearAiuFilters()" class="hover:text-white font-bold">&times;</button>`;
+        } else {
+          chip.className = "hidden";
+          chip.innerHTML = "";
+        }
+      }
+
+      const grid = document.getElementById("aiu-models-grid");
+      if (!grid) return;
+      const arcLen = 125.66; // pi * 40 for semicircle M 10 50 A 40 40 0 0 1 90 50
+      const fmtNum = (n) => Number(n || 0).toLocaleString();
+
+      grid.innerHTML = visible.map((m, idx) => {
+        const remPct = Math.max(0, Math.min(100, Number(m.remaining_pct ?? 100)));
+        const offset = (arcLen * (1 - remPct / 100)).toFixed(2);
+        const arcColor = remPct >= 50 ? "#34D399" : remPct >= 20 ? "#FBBF24" : "#F87171";
+        const callsText = m.req_limit > 0 ? `${fmtNum(m.used_calls)} / ${fmtNum(m.req_limit)}` : `${fmtNum(m.used_calls)} / ∞`;
+        const tokText = m.tok_limit > 0 ? `${fmtNum(m.used_tokens)} / ${fmtNum(m.tok_limit)}` : `${fmtNum(m.used_tokens)} / ∞`;
+        const periodLabel = m.limit_period === "minute" ? "per min" : "per day";
+        const resetLabel = _fmtResetWindow(m.reset_in_seconds, m.limit_period);
+        const capsHtml = (m.capabilities || []).map(_capBadgeHtml).join("");
+        const shortName = m.model.includes("/") ? m.model.split("/").slice(1).join("/") : m.model;
+        const statusDot = m.last_status === "ok"
+          ? `<span class="w-1.5 h-1.5 rounded-full bg-emerald-400" title="Last: OK"></span>`
+          : m.last_status === "rate_limited"
+            ? `<span class="w-1.5 h-1.5 rounded-full bg-amber-400" title="Last: 429"></span>`
+            : m.last_status === "error"
+              ? `<span class="w-1.5 h-1.5 rounded-full bg-rose-400" title="Last: Error"></span>`
+              : "";
+
+        return `
+          <article class="p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-2 text-xs">
+            <header class="flex items-start justify-between gap-2 min-w-0">
+              <div class="min-w-0">
+                <div class="flex items-center gap-1.5 min-w-0">
+                  ${statusDot}
+                  <span class="font-semibold text-white truncate" title="${_escTaste(m.model)}">${_escTaste(shortName)}</span>
+                </div>
+                <div class="text-[10px] text-slate-400">${_escTaste(m.provider_label)} · <span class="text-slate-300">${periodLabel}</span> · resets ${resetLabel}</div>
+              </div>
+              <div class="flex items-center gap-1 shrink-0">
+                <button type="button" onclick="testAiModelByIdx(${idx}, this)" class="px-2 py-1 rounded-md bg-[#5E6AD2] hover:bg-[#6E7AE2] text-[10px] font-semibold text-white">Test</button>
+                <button type="button" onclick="toggleAiModelEdit(${idx})" class="px-2 py-1 rounded-md bg-slate-800 hover:bg-slate-700 text-[10px] text-slate-200">Edit</button>
+              </div>
+            </header>
+
+            <div class="flex items-center gap-3">
+              <div class="relative w-[84px] h-[48px] shrink-0">
+                <progress class="sr-only" value="${remPct}" max="100" aria-label="${_escTaste(m.model)} remaining quota" aria-valuetext="${_escTaste(callsText)} (${remPct}% left)"></progress>
+                <svg viewBox="0 0 100 56" class="w-full h-full overflow-visible" aria-hidden="true">
+                  <path d="M 10 50 A 40 40 0 0 1 90 50" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="8" stroke-linecap="round" />
+                  <path d="M 10 50 A 40 40 0 0 1 90 50" fill="none" stroke="${arcColor}" stroke-width="8" stroke-linecap="round" stroke-dasharray="${arcLen}" stroke-dashoffset="${offset}" style="transition: stroke-dashoffset 280ms ease, stroke 200ms ease;" />
+                </svg>
+                <div class="absolute inset-x-0 bottom-0 text-center leading-none" aria-hidden="true">
+                  <span class="text-xs font-bold font-mono-num text-white">${Math.round(remPct)}%</span>
+                  <span class="block text-[9px] text-slate-400">left</span>
+                </div>
+              </div>
+              <div class="flex-1 min-w-0 space-y-1 font-mono-num">
+                <div class="flex justify-between gap-1 text-[11px]"><span class="text-slate-400 font-sans">Calls</span><span class="text-white font-semibold">${callsText}</span></div>
+                <div class="flex justify-between gap-1 text-[11px]"><span class="text-slate-400 font-sans">Tokens</span><span class="text-slate-200">${tokText}</span></div>
+                <div id="aiu-test-res-${idx}" class="text-[10px] text-slate-400 truncate">${m.last_error ? _escTaste(m.last_error) : (m.configured ? "Ready" : "No API key")}</div>
+              </div>
+            </div>
+
+            <div class="flex flex-wrap gap-1">${capsHtml}</div>
+
+            <form id="aiu-edit-form-${idx}" onsubmit="saveAiModelConfig(event, ${idx})" class="hidden pt-2 border-t border-slate-800 space-y-2">
+              <div class="grid grid-cols-3 gap-1.5 text-[11px]">
+                <div>
+                  <label class="block text-[10px] text-slate-400 mb-0.5">Period</label>
+                  <select id="aiu-ed-period-${idx}" class="w-full bg-slate-900 border border-slate-700 rounded px-1.5 py-1 text-[11px] text-white">
+                    <option value="minute" ${m.limit_period === "minute" ? "selected" : ""}>Per Min</option>
+                    <option value="day" ${m.limit_period === "day" ? "selected" : ""}>Per Day</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-[10px] text-slate-400 mb-0.5">Req Limit</label>
+                  <input id="aiu-ed-req-${idx}" type="number" min="0" value="${m.req_limit}" class="w-full bg-slate-900 border border-slate-700 rounded px-1.5 py-1 text-[11px] text-white font-mono-num" />
+                </div>
+                <div>
+                  <label class="block text-[10px] text-slate-400 mb-0.5">Tok Limit</label>
+                  <input id="aiu-ed-tok-${idx}" type="number" min="0" step="100" value="${m.tok_limit}" class="w-full bg-slate-900 border border-slate-700 rounded px-1.5 py-1 text-[11px] text-white font-mono-num" />
+                </div>
+              </div>
+              <div class="flex justify-end gap-1.5">
+                <button type="button" onclick="toggleAiModelEdit(${idx})" class="px-2 py-1 rounded bg-slate-800 text-[10px] text-slate-300">Cancel</button>
+                <button type="submit" class="px-2.5 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-[10px] font-semibold text-white">Save</button>
+              </div>
+            </form>
+          </article>`;
+      }).join("");
+
+      clearTimeout(_aiuRefreshTimer);
+      const minActive = models.filter((m) => m.limit_period === "minute" && m.used_calls > 0);
+      if (minActive.length > 0 && !document.getElementById("panel-settings")?.classList.contains("hidden")) {
+        const soonest = Math.min(...minActive.map((m) => Number(m.reset_in_seconds || 10)));
+        _aiuRefreshTimer = setTimeout(loadAiUsage, Math.min(Math.max(soonest + 1, 3), 15) * 1000);
+      }
+    }
+
+    function toggleAiModelEdit(idx) {
+      document.getElementById(`aiu-edit-form-${idx}`)?.classList.toggle("hidden");
+    }
+
+    async function saveAiModelConfig(e, idx) {
+      e.preventDefault();
+      const m = (window._aiModelQuotasVisible || window._aiModelQuotasCache || [])[idx];
+      if (!m) return;
+      const payload = {
+        provider: m.provider,
+        model: m.model,
+        limit_period: document.getElementById(`aiu-ed-period-${idx}`).value,
+        req_limit: parseInt(document.getElementById(`aiu-ed-req-${idx}`).value || "0", 10),
+        tok_limit: parseInt(document.getElementById(`aiu-ed-tok-${idx}`).value || "0", 10),
+      };
+      const res = await fetch("/api/settings/ai-models/config", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        showToast("Could not save model limit.", "err");
+        return;
+      }
+      showToast(`Saved ${m.model} limits (${payload.req_limit} / ${payload.limit_period}).`, "ok");
+      await loadAiUsage();
+    }
+
+    async function testAiModelByIdx(idx, btn) {
+      const m = (window._aiModelQuotasVisible || window._aiModelQuotasCache || [])[idx];
+      if (!m) return;
+      const outEl = document.getElementById(`aiu-test-res-${idx}`);
+      if (btn) { btn.disabled = true; btn.textContent = "..."; }
+      if (outEl) { outEl.textContent = "Testing..."; outEl.className = "text-[10px] text-sky-300 truncate"; }
+      try {
+        const res = await fetch("/api/settings/ai-models/test", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ provider: m.provider, model: m.model }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          showToast(data.detail || "Test request failed.", "err");
+          return;
+        }
+        showToast(`${m.model}: ${data.detail || data.status} (${data.latency_ms}ms)`, data.ok ? "ok" : "err");
+        await loadAiUsage();
+        const afterEl = document.getElementById(`aiu-test-res-${idx}`);
+        if (afterEl) {
+          afterEl.textContent = `${data.ok ? "OK" : data.status} · ${data.latency_ms}ms · ${data.detail}`;
+          afterEl.className = `text-[10px] truncate ${data.ok ? "text-emerald-400" : "text-amber-300"}`;
+        }
+      } finally {
+        if (btn) { btn.disabled = false; btn.textContent = "Test"; }
+      }
+    }
+
+    async function testAllAiModels() {
+      const models = window._aiModelQuotasVisible || window._aiModelQuotasCache || [];
+      if (!models.length) return;
+      const btn = document.getElementById("aiu-test-all-btn");
+      if (btn) { btn.disabled = true; btn.textContent = `Testing 0/${models.length}...`; }
+      let done = 0;
+      let okCount = 0;
+      const resultsMap = {};
+      try {
+        // Test in small batches so all models finish quickly without flooding the browser
+        const batchSize = 4;
+        for (let i = 0; i < models.length; i += batchSize) {
+          const slice = models.slice(i, i + batchSize);
+          await Promise.allSettled(slice.map(async (m, offset) => {
+            const idx = i + offset;
+            const outEl = document.getElementById(`aiu-test-res-${idx}`);
+            if (outEl) { outEl.textContent = "Testing..."; outEl.className = "text-[10px] text-sky-300 truncate"; }
+            try {
+              const res = await fetch("/api/settings/ai-models/test", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ provider: m.provider, model: m.model }),
+              });
+              const data = await res.json().catch(() => ({}));
+              resultsMap[idx] = data;
+              if (res.ok && data.ok) okCount += 1;
+              if (outEl) {
+                outEl.textContent = `${data.ok ? "OK" : (data.status || "err")} · ${data.latency_ms ?? 0}ms · ${data.detail || ""}`;
+                outEl.className = `text-[10px] truncate ${data.ok ? "text-emerald-400" : "text-amber-300"}`;
+              }
+            } catch (_) {
+              if (outEl) { outEl.textContent = "Network error"; outEl.className = "text-[10px] text-rose-400 truncate"; }
+            } finally {
+              done += 1;
+              if (btn) btn.textContent = `Testing ${done}/${models.length}...`;
+            }
+          }));
+        }
+        await loadAiUsage();
+        for (const [idx, data] of Object.entries(resultsMap)) {
+          const afterEl = document.getElementById(`aiu-test-res-${idx}`);
+          if (afterEl && data) {
+            afterEl.textContent = `${data.ok ? "OK" : (data.status || "err")} · ${data.latency_ms ?? 0}ms · ${data.detail || ""}`;
+            afterEl.className = `text-[10px] truncate ${data.ok ? "text-emerald-400" : "text-amber-300"}`;
+          }
+        }
+        showToast(`AI Health Check: ${okCount}/${models.length} OK`, okCount > 0 ? "ok" : "err");
+      } finally {
+        if (btn) { btn.disabled = false; btn.textContent = "Test All"; }
+      }
+    }
+
+    async function clearAiUsageLogs() {
+      if (!confirm("Clear recorded AI usage logs?")) return;
+      const res = await fetch("/api/settings/ai-usage", { method: "DELETE" });
+      if (res.ok) {
+        showToast("Cleared AI usage logs.", "info");
+        await loadAiUsage();
+      }
+    }
+
+    const ALL_CONFIGURABLE_TABS = ["wealth", "assets", "kitchen", "trainer", "friction", "assistant", "resolve"];
+    function applyVisibleTabs(visibleTabsStr) {
+      const activeSet = new Set(
+        (visibleTabsStr !== undefined && visibleTabsStr !== null
+          ? String(visibleTabsStr).split(",")
+          : ALL_CONFIGURABLE_TABS
+        ).map((t) => t.trim()).filter(Boolean)
+      );
+      window._activeVisibleTabsSet = activeSet;
+      document.querySelectorAll(".vis-tab-chk").forEach((chk) => {
+        chk.checked = activeSet.has(chk.value);
+      });
+      ALL_CONFIGURABLE_TABS.forEach((t) => {
+        const btn = document.getElementById(`tab-${t}`);
+        if (btn) btn.classList.toggle("hidden", !activeSet.has(t));
+      });
+      // If the currently open tab is hidden (and not settings), switch to first visible tab or settings
+      const openTab = ALL_CONFIGURABLE_TABS.find((t) => !document.getElementById(`panel-${t}`)?.classList.contains("hidden"));
+      if (openTab && !activeSet.has(openTab)) {
+        const fallback = ALL_CONFIGURABLE_TABS.find((t) => activeSet.has(t)) || "settings";
+        switchTab(fallback);
+      }
+    }
+
+    function _getSelectedVisibleTabs() {
+      return Array.from(document.querySelectorAll(".vis-tab-chk"))
+        .filter((c) => c.checked)
+        .map((c) => c.value)
+        .join(",");
+    }
+
+    async function saveVisibleTabs() {
+      const visible = _getSelectedVisibleTabs();
+      applyVisibleTabs(visible);
+      const s = appSettingsCache || {};
+      await fetch("/api/settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          auto_sync_enabled: s.auto_sync_enabled ?? true,
+          live_listener_enabled: s.live_listener_enabled ?? true,
+          auto_learn_categories: s.auto_learn_categories ?? true,
+          auto_sync_hour: s.auto_sync_hour ?? 8,
+          auto_sync_lookback_days: s.auto_sync_lookback_days ?? 3,
+          monthly_budget_myr: s.monthly_budget_myr ?? 3000,
+          default_calories: s.default_calories ?? 2000,
+          default_protein_g: s.default_protein_g ?? 120,
+          account_holder_names: s.account_holder_names || "",
+          visible_tabs: visible,
+        }),
+      });
+      if (appSettingsCache) appSettingsCache.visible_tabs = visible;
+      showToast("Tab visibility updated.", "ok");
+    }
+
+    async function resetVisibleTabs() {
+      document.querySelectorAll(".vis-tab-chk").forEach((c) => { c.checked = true; });
+      await saveVisibleTabs();
     }
 
     function _renderCategoryModelPayload(data) {
@@ -2842,6 +3764,7 @@
         default_calories: parseInt(document.getElementById("set-cals").value, 10),
         default_protein_g: parseInt(document.getElementById("set-prot").value, 10),
         account_holder_names: document.getElementById("set-holder-names").value.trim(),
+        visible_tabs: _getSelectedVisibleTabs(),
       };
       const tngPwVal = document.getElementById("set-tng-pdf-password").value.trim();
       if (tngPwVal) payload.tng_pdf_password = tngPwVal;
@@ -3160,35 +4083,7 @@
 
       animateCounter(document.getElementById("kpi-income"), sum.total_income_myr, fmtMYR);
       animateCounter(document.getElementById("kpi-repayment"), sum.total_repayment_myr || 0, fmtMYR);
-      animateCounter(document.getElementById("kpi-expense"), sum.total_expense_myr, fmtMYR);
-      animateCounter(document.getElementById("kpi-burn-period"), sum.period_daily_burn_myr, (v) => `${fmtMYR(v)} / day`);
-
-      const budget = appSettingsCache.monthly_budget_myr || 3000;
-      const pct = Math.round((sum.total_expense_myr / budget) * 100);
-      const expBar = document.getElementById("kpi-expense-bar");
-      if (expBar) expBar.style.width = `${Math.min(100, Math.max(0, pct))}%`;
-
-      // Contrast Effect: Gross spend anchor vs Net out-of-pocket + Goal Gradient budget remaining
-      const grossExpense = allEntriesCache
-        .filter((r) => !r.is_self_transfer && r.tx_type === "expense")
-        .reduce((acc, r) => acc + r.amount_myr, 0);
-      const grossEl = document.getElementById("kpi-expense-gross");
-      if (grossEl) {
-        if (grossExpense > sum.total_expense_myr + 0.01) {
-          grossEl.textContent = `Gross ${fmtMYR(grossExpense)}`;
-          grossEl.classList.remove("hidden");
-        } else {
-          grossEl.classList.add("hidden");
-        }
-      }
-      const expSubEl = document.getElementById("kpi-expense-sub");
-      if (expSubEl) {
-        const diff = budget - sum.total_expense_myr;
-        expSubEl.textContent = diff >= 0
-          ? `${fmtMYR(diff)} left in monthly budget (${Math.max(0, 100 - pct)}%)`
-          : `Over budget by ${fmtMYR(Math.abs(diff))}`;
-        expSubEl.className = `text-[10px] font-mono-num mt-1 ${diff < 0 ? "text-[#F87171]" : "text-[#6B7280]"}`;
-      }
+      updateExpenseKpiCard(sum);
 
       // Category Sub-Budgets
       const catBudgetsEl = document.getElementById("category-budgets-wrap");
@@ -3344,6 +4239,9 @@
       if (isStatement) {
         return `<span onclick="event.stopPropagation(); showToast('This transaction came from a bank statement upload (no email).', 'info')" title="Bank statement upload (no email)${rawNote}" class="truncate block cursor-default">${label}</span>`;
       }
+      if (Array.isArray(r.receipt_items) && r.receipt_items.length) {
+        return `<span onclick="event.stopPropagation(); openReceiptItemsModal(${r.id})" title="${r.merchant}${rawNote} · Click to view ${r.receipt_items.length} receipt item(s)" class="truncate block cursor-pointer hover:text-[#818CF8] hover:underline transition">${label}</span>`;
+      }
       const hasEmail = sender.includes("@");
       if (!hasEmail) {
         return `<span title="${r.merchant}" class="truncate block">${label}</span>`;
@@ -3352,6 +4250,35 @@
         ? `https://mail.google.com/mail/u/0/#all/${encodeURIComponent(r.gmail_thread_id)}`
         : `/api/wealth/entries/${r.id}/email-link`;
       return `<a href="${url}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()" title="Open email in Gmail (${r.sender_email})${rawNote}" class="truncate block hover:text-[#818CF8] hover:underline transition">${label}</a>`;
+    }
+
+
+    function openReceiptItemsModal(entryId) {
+      const r = (allEntriesCache || []).find((x) => x.id === entryId);
+      if (!r) return;
+      document.getElementById("rim-merchant").textContent = r.display_merchant || r.merchant;
+      document.getElementById("rim-meta").textContent = `${(r.occurred_at || "").slice(0, 10)} · ${r.account_name || "Other / Cash"} · Total ${fmtMYR(r.amount_myr)}`;
+      const kitchenSet = new Set((r.added_to_kitchen || []).map((x) => String(x).toLowerCase()));
+      const items = r.receipt_items || [];
+      document.getElementById("rim-items-body").innerHTML = items.length
+        ? items.map((it) => {
+            const inKitchen = kitchenSet.has(String(it.name || "").toLowerCase()) || !!it.is_food;
+            return `
+              <tr class="border-b border-slate-800/70 last:border-b-0">
+                <td class="py-2 pr-2 text-slate-100 font-medium">
+                  ${_escTaste(it.name || "")}
+                  ${inKitchen ? `<span class="ml-1.5 text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-medium">Kitchen Matrix</span>` : ""}
+                </td>
+                <td class="py-2 px-2 text-slate-400 text-right font-mono-num whitespace-nowrap">${it.qty || 1} ${_escTaste(it.unit || "pcs")}</td>
+                <td class="py-2 pl-2 text-slate-200 text-right font-mono-num whitespace-nowrap">${it.price_myr ? fmtMYR(it.price_myr) : "-"}</td>
+              </tr>`;
+          }).join("")
+        : `<tr><td colspan="3" class="py-4 text-center text-slate-500">No itemized details recorded.</td></tr>`;
+      document.getElementById("receipt-items-modal").classList.remove("hidden");
+    }
+    function closeReceiptItemsModal() {
+      const el = document.getElementById("receipt-items-modal");
+      if (el) el.classList.add("hidden");
     }
 
     function _entryAmountBadge(r) {
@@ -4105,6 +5032,256 @@
       hideOverlay(document.getElementById("link-repayments-modal-backdrop"));
     }
 
+    let pendingSplitEntry = null;
+    let splitPartsState = [];
+
+    function _getSplitLinkTargets() {
+      if (!pendingSplitEntry) return [];
+      const wantExp = pendingSplitEntry.tx_type === "repayment";
+      return (allEntriesCache || []).filter((r) => {
+        if (r.id === pendingSplitEntry.id || r.is_self_transfer) return false;
+        if (wantExp) return r.tx_type === "expense";
+        return true;
+      });
+    }
+
+    function _candidateSharesForExpense(exp) {
+      const shares = [];
+      if (exp.owed_remaining_myr && exp.owed_remaining_myr > 0) {
+        shares.push(Math.round(exp.owed_remaining_myr * 100) / 100);
+      }
+      const sc = exp.raw_payload?.split_count;
+      if (sc && sc > 1) {
+        shares.push(Math.round((exp.amount_myr / sc) * 100) / 100);
+      }
+      shares.push(Math.round(exp.amount_myr * 100) / 100);
+      for (let n = 2; n <= 6; n++) {
+        shares.push(Math.round((exp.amount_myr / n) * 100) / 100);
+      }
+      return Array.from(new Set(shares));
+    }
+
+    function _findBestMatchForAmount(amt, excludeIds = new Set()) {
+      const targets = _getSplitLinkTargets();
+      let best = null;
+      let bestDiff = 0.06;
+      for (const t of targets) {
+        if (excludeIds.has(t.id)) continue;
+        for (const s of _candidateSharesForExpense(t)) {
+          const diff = Math.abs(s - amt);
+          if (diff < bestDiff) {
+            bestDiff = diff;
+            best = t;
+          }
+        }
+      }
+      return best;
+    }
+
+    function autoDetectSplitFromExpenses(showFeedback = false) {
+      if (!pendingSplitEntry) return false;
+      const targetAmt = Math.round(pendingSplitEntry.amount_myr * 100) / 100;
+      const targets = _getSplitLinkTargets().slice(0, 60);
+      const options = [];
+      for (const t of targets) {
+        for (const s of _candidateSharesForExpense(t)) {
+          if (s > 0 && s < targetAmt) options.push({ entry: t, share: s });
+        }
+      }
+
+      let foundPair = null;
+      let bestErr = 0.06;
+      for (let i = 0; i < options.length; i++) {
+        for (let j = i + 1; j < options.length; j++) {
+          if (options[i].entry.id === options[j].entry.id) continue;
+          const err = Math.abs(options[i].share + options[j].share - targetAmt);
+          if (err < bestErr) {
+            bestErr = err;
+            foundPair = [options[i], options[j]];
+          }
+        }
+      }
+
+      if (!foundPair) {
+        if (showFeedback) showToast("No exact 2-bill match found — type Part 1 amount to auto-balance Part 2.", "ok");
+        return false;
+      }
+
+      const [a, b] = foundPair;
+      const amt1 = Math.round(a.share * 100) / 100;
+      const amt2 = Math.round((targetAmt - amt1) * 100) / 100;
+      splitPartsState = [
+        {
+          merchant: `${pendingSplitEntry.display_merchant || pendingSplitEntry.merchant} (${a.entry.display_merchant || a.entry.merchant})`,
+          amount_myr: amt1,
+          tx_type: pendingSplitEntry.tx_type,
+          category: pendingSplitEntry.category,
+          linked_entry_id: a.entry.id,
+        },
+        {
+          merchant: `${pendingSplitEntry.display_merchant || pendingSplitEntry.merchant} (${b.entry.display_merchant || b.entry.merchant})`,
+          amount_myr: amt2,
+          tx_type: pendingSplitEntry.tx_type,
+          category: pendingSplitEntry.category,
+          linked_entry_id: b.entry.id,
+        },
+      ];
+      renderSplitPartRows();
+      updateSplitSumDisplay();
+      if (showFeedback) showToast(`Auto-matched 2 bills: ${fmtMYR(amt1)} + ${fmtMYR(amt2)}`, "ok");
+      return true;
+    }
+
+    function onSplitAmountInput(idx, rawVal) {
+      if (!pendingSplitEntry) return;
+      const val = parseFloat(rawVal);
+      splitPartsState[idx].amount_myr = Number.isFinite(val) ? val : 0;
+
+      // Auto-calculate the remaining amount into the last part (when editing any earlier part)
+      const lastIdx = splitPartsState.length - 1;
+      if (idx < lastIdx) {
+        const sumBeforeLast = splitPartsState
+          .slice(0, lastIdx)
+          .reduce((acc, p) => acc + (parseFloat(p.amount_myr) || 0), 0);
+        const rem = Math.max(0.01, Math.round((pendingSplitEntry.amount_myr - sumBeforeLast) * 100) / 100);
+        splitPartsState[lastIdx].amount_myr = rem;
+        const lastInput = document.getElementById(`split-amt-${lastIdx}`);
+        if (lastInput) lastInput.value = rem.toFixed(2);
+      }
+
+      // Auto-select matching transactions for all parts based on their updated amounts
+      const usedIds = new Set();
+      splitPartsState.forEach((p, pIdx) => {
+        const match = _findBestMatchForAmount(parseFloat(p.amount_myr) || 0, usedIds);
+        if (match) {
+          usedIds.add(match.id);
+          p.linked_entry_id = match.id;
+          const sel = document.getElementById(`split-link-${pIdx}`);
+          if (sel) sel.value = String(match.id);
+        }
+      });
+
+      updateSplitSumDisplay();
+    }
+
+    function openSplitEntryModal(entryId) {
+      const entry = (allEntriesCache || []).find((r) => r.id === entryId);
+      if (!entry) return;
+      pendingSplitEntry = entry;
+      const half1 = Math.round((entry.amount_myr / 2) * 100) / 100;
+      const half2 = Math.round((entry.amount_myr - half1) * 100) / 100;
+      splitPartsState = [
+        { merchant: `${entry.merchant} (Part 1)`, amount_myr: half1, tx_type: entry.tx_type, category: entry.category, linked_entry_id: entry.linked_entry_id || "" },
+        { merchant: `${entry.merchant} (Part 2)`, amount_myr: half2, tx_type: entry.tx_type, category: entry.category, linked_entry_id: "" },
+      ];
+      document.getElementById("split-entry-target").innerHTML = `
+        <span class="font-semibold">${_escTaste(entry.merchant)}</span>
+        <span class="text-slate-400 ml-2">${fmtMYR(entry.amount_myr)} · ${_escTaste(entry.tx_type)} · ${_escTaste(entry.account_name)}</span>
+      `;
+      if (!autoDetectSplitFromExpenses(false)) {
+        renderSplitPartRows();
+        updateSplitSumDisplay();
+      }
+      document.getElementById("split-entry-modal-backdrop").classList.remove("hidden");
+    }
+
+    function closeSplitEntryModal() {
+      document.getElementById("split-entry-modal-backdrop").classList.add("hidden");
+      pendingSplitEntry = null;
+      splitPartsState = [];
+    }
+
+    function addSplitPartRow() {
+      if (!pendingSplitEntry) return;
+      const used = splitPartsState.reduce((acc, p) => acc + (parseFloat(p.amount_myr) || 0), 0);
+      const rem = Math.max(0.01, Math.round((pendingSplitEntry.amount_myr - used) * 100) / 100);
+      splitPartsState.push({
+        merchant: `${pendingSplitEntry.merchant} (Part ${splitPartsState.length + 1})`,
+        amount_myr: rem,
+        tx_type: pendingSplitEntry.tx_type,
+        category: pendingSplitEntry.category,
+        linked_entry_id: "",
+      });
+      renderSplitPartRows();
+      updateSplitSumDisplay();
+    }
+
+    function removeSplitPartRow(idx) {
+      if (splitPartsState.length <= 2) return;
+      splitPartsState.splice(idx, 1);
+      renderSplitPartRows();
+      updateSplitSumDisplay();
+    }
+
+    function updateSplitSumDisplay() {
+      if (!pendingSplitEntry) return;
+      const total = Math.round(splitPartsState.reduce((acc, p) => acc + (parseFloat(p.amount_myr) || 0), 0) * 100) / 100;
+      const target = Math.round(pendingSplitEntry.amount_myr * 100) / 100;
+      const ok = Math.abs(total - target) <= 0.02 && splitPartsState.every((p) => (parseFloat(p.amount_myr) || 0) > 0);
+      const el = document.getElementById("split-sum-status");
+      el.textContent = `Sum: ${fmtMYR(total)} / ${fmtMYR(target)}`;
+      el.className = `text-xs font-mono-num font-semibold ${ok ? "text-emerald-400" : "text-rose-400"}`;
+      document.getElementById("split-save-btn").disabled = !ok;
+    }
+
+    function renderSplitPartRows() {
+      const cats = Array.from(new Set([...(allEntriesCache || []).map((r) => r.category), "Food & Beverage", "Shopping & Retail", "Transport", "Badminton", "Groceries & Mart", "P2P Transfer Out", "Income / Refund", "Other"].filter(Boolean)));
+      const linkTargets = (allEntriesCache || []).filter((r) => pendingSplitEntry && r.id !== pendingSplitEntry.id && !r.is_self_transfer);
+      document.getElementById("split-parts-list").innerHTML = splitPartsState.map((p, idx) => `
+        <div class="p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-2">
+          <div class="flex items-center justify-between">
+            <span class="text-[11px] font-semibold text-emerald-400">Part ${idx + 1}</span>
+            ${splitPartsState.length > 2 ? `<button type="button" onclick="removeSplitPartRow(${idx})" class="text-slate-400 hover:text-rose-400 text-xs">Remove</button>` : ""}
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-4 gap-2">
+            <input type="text" value="${_escTaste(p.merchant)}" oninput="splitPartsState[${idx}].merchant = this.value" placeholder="Description" class="sm:col-span-2 bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white" />
+            <input id="split-amt-${idx}" type="number" step="0.01" min="0.01" value="${p.amount_myr}" oninput="onSplitAmountInput(${idx}, this.value)" class="bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white font-mono-num" />
+            <select onchange="splitPartsState[${idx}].tx_type = this.value" class="bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white">
+              <option value="expense" ${p.tx_type === "expense" ? "selected" : ""}>Expense</option>
+              <option value="repayment" ${p.tx_type === "repayment" ? "selected" : ""}>Repayment</option>
+              <option value="income" ${p.tx_type === "income" ? "selected" : ""}>Income</option>
+            </select>
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <select onchange="splitPartsState[${idx}].category = this.value" class="bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white">
+              ${cats.map((c) => `<option value="${_escTaste(c)}" ${p.category === c ? "selected" : ""}>${_escTaste(c)}</option>`).join("")}
+            </select>
+            <select id="split-link-${idx}" onchange="splitPartsState[${idx}].linked_entry_id = this.value ? parseInt(this.value, 10) : ''" class="bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-slate-300">
+              <option value="">Link to transaction (optional)...</option>
+              ${linkTargets.slice(0, 60).map((t) => `<option value="${t.id}" ${String(p.linked_entry_id) === String(t.id) ? "selected" : ""}>${_escTaste((t.occurred_at || "").slice(0, 10))} · ${_escTaste(t.merchant)} (${fmtMYR(t.amount_myr)})</option>`).join("")}
+            </select>
+          </div>
+        </div>
+      `).join("");
+    }
+
+    async function saveSplitEntry(e) {
+      e.preventDefault();
+      if (!pendingSplitEntry) return;
+      const res = await fetch(`/api/wealth/entries/${pendingSplitEntry.id}/split`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          parts: splitPartsState.map((p) => ({
+            merchant: p.merchant,
+            amount_myr: parseFloat(p.amount_myr),
+            tx_type: p.tx_type,
+            category: p.category,
+            linked_entry_id: p.linked_entry_id ? parseInt(p.linked_entry_id, 10) : null,
+          })),
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        showToast(err.detail || "Could not split transaction.", "err");
+        return;
+      }
+      closeSplitEntryModal();
+      showToast("Transaction split — you can now link each part independently.", "ok");
+      await refreshAll();
+      _refreshActiveEntryModal();
+    }
+
     function _refreshActiveEntryModal() {
       if (activeModalDate) { openDayTransactionsModal(activeModalDate, true); }
       else if (activeModalCategory) { openCategoryTransactionsModal(activeModalCategory, true); }
@@ -4439,9 +5616,58 @@
       if (btn) btn.classList.toggle("hidden", excludedCategories.size === 0);
     }
 
+    function updateExpenseKpiCard(sum) {
+      if (!sum) return;
+      let totalExp = sum.total_expense_myr || 0;
+      let grossExp = (allEntriesCache || [])
+        .filter((r) => !r.is_self_transfer && r.tx_type === "expense")
+        .reduce((acc, r) => acc + Number(r.amount_myr || 0), 0);
+      let dailyBurn = sum.period_daily_burn_myr || 0;
+
+      if (excludedCategories.size > 0) {
+        const activeExpRows = (allEntriesCache || []).filter(
+          (r) => !r.is_self_transfer && r.tx_type === "expense" && !excludedCategories.has(r.category)
+        );
+        totalExp = activeExpRows.reduce((acc, r) => {
+          const net = r.net_amount_myr !== null && r.net_amount_myr !== undefined ? r.net_amount_myr : r.amount_myr;
+          return acc + Number(net || 0);
+        }, 0);
+        grossExp = activeExpRows.reduce((acc, r) => acc + Number(r.amount_myr || 0), 0);
+        const days = sum.period_daily_burn_myr > 0 ? sum.total_expense_myr / sum.period_daily_burn_myr : 1;
+        dailyBurn = days > 0 ? totalExp / days : 0;
+      }
+
+      animateCounter(document.getElementById("kpi-expense"), totalExp, fmtMYR);
+      animateCounter(document.getElementById("kpi-burn-period"), dailyBurn, (v) => `${fmtMYR(v)} / day`);
+
+      const budget = appSettingsCache.monthly_budget_myr || 3000;
+      const pct = Math.round((totalExp / budget) * 100);
+      const expBar = document.getElementById("kpi-expense-bar");
+      if (expBar) expBar.style.width = `${Math.min(100, Math.max(0, pct))}%`;
+
+      const grossEl = document.getElementById("kpi-expense-gross");
+      if (grossEl) {
+        if (grossExp > totalExp + 0.01) {
+          grossEl.textContent = `Gross ${fmtMYR(grossExp)}`;
+          grossEl.classList.remove("hidden");
+        } else {
+          grossEl.classList.add("hidden");
+        }
+      }
+      const expSubEl = document.getElementById("kpi-expense-sub");
+      if (expSubEl) {
+        const diff = budget - totalExp;
+        expSubEl.textContent = diff >= 0
+          ? `${fmtMYR(diff)} left in monthly budget (${Math.max(0, 100 - pct)}%)`
+          : `Over budget by ${fmtMYR(Math.abs(diff))}`;
+        expSubEl.className = `text-[10px] font-mono-num mt-1 ${diff < 0 ? "text-[#F87171]" : "text-[#6B7280]"}`;
+      }
+    }
+
     async function renderFilteredCashflowAndCalendar() {
       _syncCategoryResetBtn();
       if (!lastCashflowSum) return;
+      updateExpenseKpiCard(lastCashflowSum);
       const filteredSum = _buildFilteredDailySum(lastCashflowSum);
       renderCashflowCalendar(filteredSum);
       await renderCashflowChartOnly(filteredSum);
@@ -4627,6 +5853,11 @@
       }).join("");
     }
 
+    function _safeHttpUrl(u) {
+      const s = String(u || "").trim();
+      return /^https?:\/\//i.test(s) ? s : "";
+    }
+
     async function loadAssets() {
       const [assetsRes, nwRes] = await Promise.all([fetch("/api/assets"), fetch("/api/assets/net-worth")]);
       const assets = await assetsRes.json();
@@ -4635,63 +5866,115 @@
       document.getElementById("nw-assets").textContent = fmtMYR(nw.tracked_assets_value_myr);
       document.getElementById("nw-total").textContent = fmtMYR(nw.total_net_worth_myr);
 
-      document.getElementById("assets-grid").innerHTML = assets.map((a) => {
-        const v = a.latest_valuation;
-        const pnlColor = a.unrealized_pnl_myr >= 0 ? "text-emerald-400" : "text-rose-400";
-        return `
-          <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-3">
-            <div class="flex justify-between items-start">
-              <div>
-                <span class="text-xs px-2 py-0.5 rounded-full bg-slate-800 text-sky-300">${a.category}</span>
-                <h3 class="text-base font-bold text-white mt-2">${a.name}</h3>
-                <p class="text-xs text-slate-400">Query: "${a.search_query}" · Qty ${a.quantity}</p>
-              </div>
-              <div class="flex gap-1.5">
-                <button onclick="scrapeOne(${a.id})" class="text-xs px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-sky-300">Refresh</button>
-                <button onclick="togglePasteBox(${a.id})" class="text-xs px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-amber-300">Paste Prices</button>
-                <button onclick="deleteAsset(${a.id})" class="text-xs px-2 py-1 rounded-lg bg-slate-800 hover:bg-rose-800 text-rose-300">&times;</button>
-              </div>
-            </div>
-            <div class="border-t border-slate-800 pt-3 flex justify-between items-baseline">
-              <div><div class="text-xs text-slate-400">Liquid Market Value</div><div class="text-xl font-bold text-white">${fmtMYR(a.total_liquid_value_myr)}</div></div>
-              <div class="text-right"><div class="text-xs text-slate-400">Unrealized PnL</div><div class="text-sm font-semibold ${pnlColor}">${a.unrealized_pnl_myr >= 0 ? "+" : ""}${fmtMYR(a.unrealized_pnl_myr)}</div></div>
-            </div>
-            <div class="text-xs text-slate-400">${v ? `Range: ${fmtMYR(v.min_price_myr)} – ${fmtMYR(v.max_price_myr)} (${v.sample_count} listings · ${v.source})` : "Not scraped yet — click Refresh or Paste Prices"}</div>
-            <div id="paste-box-${a.id}" class="hidden pt-2 border-t border-slate-800 space-y-2">
-              <textarea id="paste-input-${a.id}" rows="2" placeholder="Paste Carousell prices (e.g. RM 450, RM 480, RM 510)" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs"></textarea>
-              <button onclick="submitPastedListings(${a.id})" class="w-full py-1.5 rounded-lg bg-amber-600 hover:bg-amber-500 text-xs font-semibold text-white">Filter Outliers &amp; Update Value</button>
-            </div>
-          </div>`;
-      }).join("");
+      document.getElementById("assets-grid").innerHTML = assets.length
+        ? assets.map((a) => {
+            const v = a.latest_valuation;
+            const pnlColor = a.unrealized_pnl_myr >= 0 ? "text-emerald-400" : "text-rose-400";
+            const qtyTag = a.quantity > 1 ? `<span class="text-[10px] text-[#8E96A4] font-mono-num shrink-0">×${a.quantity}</span>` : "";
+            const citations = Array.isArray(v?.citations) ? v.citations.filter((c) => _safeHttpUrl(c?.url)) : [];
+            const linksHtml = citations.map((c) => {
+              const safeUrl = _safeHttpUrl(c.url);
+              let host = "";
+              try { host = new URL(safeUrl).hostname.replace(/^www\./, ""); } catch (_) {}
+              const label = _escTaste((c.title || host || "Link").slice(0, 22));
+              return `<a href="${_escTaste(safeUrl)}" target="_blank" rel="noopener noreferrer" class="px-1.5 py-0.5 rounded bg-white/[0.04] hover:bg-white/[0.09] text-[10px] text-[#818CF8] truncate max-w-[110px]" title="${_escTaste(c.title || safeUrl)}">${label}</a>`;
+            }).join("");
+            const rangeText = v ? `RM ${Math.round(v.min_price_myr).toLocaleString()}–${Math.round(v.max_price_myr).toLocaleString()}` : "";
+            const footerHtml = v
+              ? `<details class="asset-details">
+                   <summary class="flex items-center justify-between gap-1 text-[11px] text-[#8E96A4] hover:text-[#F7F8F8]">
+                     <span class="font-mono-num truncate">${rangeText}</span>
+                     <span class="asset-chev text-[10px] text-[#6B7280] shrink-0">▸</span>
+                   </summary>
+                   <div class="mt-1.5 pt-1.5 border-t border-white/[0.06] space-y-1">
+                     ${v.summary ? `<p class="text-[11px] text-[#A6AEBB] leading-snug">${_escTaste(v.summary)}</p>` : ""}
+                     ${linksHtml ? `<div class="flex flex-wrap gap-1">${linksHtml}</div>` : ""}
+                     <div class="text-[10px] text-[#6B7280] font-mono-num">${_escTaste(v.source)} · ${v.sample_count}</div>
+                   </div>
+                 </details>`
+              : `<span class="text-[11px] text-[#6B7280]">Unchecked</span>`;
+            return `
+              <article class="asset-card glow-card bg-[#111216] border border-white/[0.07] rounded-xl">
+                <header class="flex items-center justify-between gap-1.5 min-w-0">
+                  <div class="flex items-center gap-1 min-w-0">
+                    <h3 class="font-semibold text-[#F7F8F8] truncate" title="${_escTaste(a.name)}">${_escTaste(a.name)}</h3>
+                    ${qtyTag}
+                  </div>
+                  <div class="flex items-center gap-1 shrink-0">
+                    <button type="button" onclick="refreshOne(${a.id}, this)" title="AI price check" aria-label="Refresh ${_escTaste(a.name)}" class="p-1 rounded-md bg-[#1E1F25] hover:bg-[#272932] text-[#818CF8] transition">
+                      <i data-lucide="refresh-cw" class="w-3 h-3"></i>
+                    </button>
+                    <button type="button" onclick="deleteAsset(${a.id})" title="Delete asset" aria-label="Delete ${_escTaste(a.name)}" class="p-1 rounded-md bg-[#1E1F25] hover:bg-rose-900/60 text-[#8E96A4] hover:text-rose-300 transition">
+                      <i data-lucide="trash-2" class="w-3 h-3"></i>
+                    </button>
+                  </div>
+                </header>
+                <div class="flex items-baseline justify-between gap-2 min-w-0">
+                  <span class="text-base font-bold font-mono-num text-[#F7F8F8] truncate">${fmtMYR(a.total_liquid_value_myr)}</span>
+                  <span class="text-[11px] font-medium font-mono-num ${pnlColor} shrink-0">${a.unrealized_pnl_myr >= 0 ? "+" : ""}${fmtMYR(a.unrealized_pnl_myr)}</span>
+                </div>
+                <footer class="min-w-0">${footerHtml}</footer>
+              </article>`;
+          }).join("")
+        : `<div class="col-span-full text-xs text-[#6B7280] py-4 text-center">No tracked assets yet.</div>`;
+      refreshIcons();
     }
 
-    function togglePasteBox(id) { document.getElementById(`paste-box-${id}`).classList.toggle("hidden"); }
-    async function submitPastedListings(id) {
-      const raw_text = document.getElementById(`paste-input-${id}`).value;
-      const res = await fetch(`/api/assets/${id}/parse-listings`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ raw_text }) });
-      const data = await res.json();
-      if (!res.ok) { showToast(data.detail || "Could not parse prices.", "err"); return; }
-      showToast(`Updated median liquid value: ${fmtMYR(data.median_price_myr)}`, "ok");
-      await loadAssets();
-    }
     async function deleteAsset(id) { await fetch(`/api/assets/${id}`, { method: "DELETE" }); showToast("Removed tracked asset.", "info"); await loadAssets(); }
-    async function scrapeAllAssets() {
-      const btn = document.getElementById("scrape-all-btn"); btn.textContent = "Scraping..."; btn.disabled = true;
+    async function refreshAllAssets() {
+      const btn = document.getElementById("refresh-all-assets-btn");
+      if (btn) {
+        btn.disabled = true;
+        btn.dataset.origHtml = btn.innerHTML;
+        btn.textContent = "Searching...";
+      }
       try {
-        const res = await fetch("/api/assets/scrape-all", { method: "POST" });
-        if (!res.ok) { const err = await res.json(); showToast(err.detail || "Carousell blocked scraping.", "err"); return; }
-        showToast("Carousell valuations updated!", "ok"); await loadAssets();
-      } finally { btn.textContent = "Scrape Carousell Now"; btn.disabled = false; }
+        const res = await fetch("/api/assets/refresh-all", { method: "POST" });
+        if (!res.ok) { const err = await res.json().catch(() => ({})); showToast(err.detail || "AI price search failed.", "err"); return; }
+        showToast("AI market valuations updated!", "ok");
+        await loadAssets();
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          if (btn.dataset.origHtml) btn.innerHTML = btn.dataset.origHtml;
+          refreshIcons();
+        }
+      }
     }
-    async function scrapeOne(id) {
-      const res = await fetch(`/api/assets/${id}/scrape`, { method: "POST" });
-      if (!res.ok) { const err = await res.json(); showToast(err.detail || "Carousell blocked scraping.", "err"); return; }
-      showToast("Asset valuation refreshed!", "ok"); await loadAssets();
+    const scrapeAllAssets = refreshAllAssets;
+
+    async function refreshOne(id, btn) {
+      const icon = btn?.querySelector("iconify-icon, svg, i");
+      if (btn) btn.disabled = true;
+      if (icon) icon.classList.add("animate-spin");
+      try {
+        const res = await fetch(`/api/assets/${id}/refresh`, { method: "POST" });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) { showToast(data.detail || "AI price search failed.", "err"); return; }
+        showToast(`${fmtMYR(data.median_price_myr)} (${data.source})`, "ok");
+        await loadAssets();
+      } finally {
+        if (btn) btn.disabled = false;
+        if (icon) icon.classList.remove("animate-spin");
+      }
     }
+    const scrapeOne = refreshOne;
+
     async function addAsset(e) {
       e.preventDefault();
-      await fetch("/api/assets", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: document.getElementById("a-name").value, search_query: document.getElementById("a-query").value, purchase_price_myr: parseFloat(document.getElementById("a-price").value || "0") }) });
-      e.target.reset(); document.getElementById("add-asset-drawer").classList.add("hidden"); await loadAssets();
+      const name = document.getElementById("a-name").value.trim();
+      const condition = document.getElementById("a-condition").value || "Used";
+      const search_query = document.getElementById("a-query").value.trim();
+      const purchase_price_myr = parseFloat(document.getElementById("a-price").value || "0");
+      const res = await fetch("/api/assets", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, condition, search_query, purchase_price_myr }),
+      });
+      if (!res.ok) { const err = await res.json().catch(() => ({})); showToast(err.detail || "Could not add asset.", "err"); return; }
+      e.target.reset();
+      document.getElementById("add-asset-drawer").classList.add("hidden");
+      await loadAssets();
     }
 
     let lastGeneratedRecipe = null;
@@ -5040,26 +6323,246 @@
     async function loadFriction() {
       const res = await fetch("/api/friction/summary"); const f = await res.json();
       const banner = document.getElementById("debt-alert-banner");
-      if (f.unsettled_debts.length > 0) {
+      const owedToMe = f.unsettled_debts.filter((d) => d.direction !== "i_owe");
+      const iOweList = f.unsettled_debts.filter((d) => d.direction === "i_owe");
+      if (owedToMe.length > 0) {
         banner.classList.remove("hidden");
-        document.getElementById("debt-alert-text").textContent = `${f.unsettled_debts.length} friend(s) owe you ${fmtMYR(f.total_owed_myr)} total: ${f.unsettled_debts.map((d) => `${d.borrower_name} (${fmtMYR(d.amount_myr)})`).join(", ")}`;
+        document.getElementById("debt-alert-text").textContent = `${owedToMe.length} friend(s) owe you ${fmtMYR(f.total_owed_myr)} total: ${owedToMe.map((d) => `${d.borrower_name} (${fmtMYR(d.remaining_myr)})`).join(", ")}`;
       } else { banner.classList.add("hidden"); }
 
-      document.getElementById("altis-cpk").textContent = f.altis.cost_per_km_myr !== null ? `RM ${f.altis.cost_per_km_myr.toFixed(2)} / km` : "Need 2+ odometer logs";
-      document.getElementById("altis-stats").textContent = `Setel Fuel: ${fmtMYR(f.altis.total_fuel_myr)} · Distance Tracked: ${f.altis.distance_km} km`;
+      const pill = document.getElementById("debt-totals-pill");
+      if (pill) {
+        pill.innerHTML = `<span class="text-emerald-400 mr-3">Owed to me: ${fmtMYR(f.total_owed_myr)}</span><span class="text-amber-400">I owe: ${fmtMYR(f.total_i_owe_myr || 0)}</span>`;
+      }
+
+      document.getElementById("altis-cpk").textContent = f.altis.cost_per_km_myr !== null ? `RM ${f.altis.cost_per_km_myr.toFixed(2)}/km` : "—";
+      document.getElementById("altis-stats").textContent = `Fuel ${fmtMYR(f.altis.total_fuel_myr)} · ${f.altis.distance_km} km`;
       document.getElementById("odometer-list").innerHTML = f.odometer_logs.length
-        ? f.odometer_logs.map((o) => `<div class="flex justify-between items-center px-2 py-1 rounded bg-slate-950 border border-slate-800"><span class="text-slate-300">${o.odometer_km.toLocaleString()} km <span class="text-slate-500">(${o.logged_at.slice(0, 10)})</span></span><button onclick="deleteOdometer(${o.id})" class="text-slate-400 hover:text-rose-400 font-bold">&times;</button></div>`).join("")
-        : `<div class="text-slate-500">No odometer readings yet.</div>`;
+        ? f.odometer_logs.map((o) => `<div class="flex justify-between items-center px-2 py-1 rounded bg-[#0B0C0E] border border-white/[0.06]"><span class="text-slate-300 font-mono-num">${o.odometer_km.toLocaleString()} km <span class="text-[#6B7280]">(${o.logged_at.slice(0, 10)})</span></span><button onclick="deleteOdometer(${o.id})" class="text-[#8E96A4] hover:text-rose-400 font-bold">&times;</button></div>`).join("")
+        : `<div class="text-[#6B7280]">No logs yet.</div>`;
       document.getElementById("gear-list").innerHTML = f.gear.map((g) => `
-        <div class="p-3 rounded-xl bg-slate-950 border ${g.alert ? "border-rose-500/60" : "border-slate-800"} space-y-1.5">
-          <div class="flex justify-between items-center text-xs"><span class="font-semibold text-white">${g.name}</span><span class="${g.alert ? "text-rose-400 font-bold" : "text-slate-400"}">${g.remaining_units} / ${g.max_units} ${g.unit} left (${g.health_pct}%)</span></div>
-          <div class="w-full bg-slate-800 h-2 rounded-full overflow-hidden"><div class="h-full ${g.alert ? "bg-rose-500" : "bg-emerald-500"}" style="width: ${g.health_pct}%"></div></div>
-          <div class="flex gap-2 pt-1"><button onclick="useGear(${g.id}, 1)" class="text-xs px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700">+1 ${g.unit}</button><button onclick="resetGear(${g.id})" class="text-xs px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-sky-300">Refill / Restring</button></div>
+        <div class="p-2 rounded-lg bg-[#0B0C0E] border ${g.alert ? "border-rose-500/60" : "border-white/[0.06]"} space-y-1">
+          <div class="flex justify-between items-center gap-1 text-[11px]"><span class="font-medium text-[#F7F8F8] truncate">${_escTaste(g.name)}</span><span class="font-mono-num shrink-0 ${g.alert ? "text-rose-400 font-bold" : "text-[#8E96A4]"}">${g.health_pct}%</span></div>
+          <div class="w-full bg-white/[0.06] h-1 rounded-full overflow-hidden"><div class="h-full ${g.alert ? "bg-rose-500" : "bg-emerald-500"}" style="width: ${g.health_pct}%"></div></div>
+          <div class="flex items-center justify-between gap-1 text-[10px] text-[#8E96A4]">
+            <span class="font-mono-num">${g.remaining_units}/${g.max_units} ${g.unit}</span>
+            <div class="flex gap-1"><button onclick="useGear(${g.id}, 1)" class="px-1.5 py-0.5 rounded bg-[#1E1F25] hover:bg-[#272932] text-[#F7F8F8]">+1</button><button onclick="resetGear(${g.id})" class="px-1.5 py-0.5 rounded bg-[#1E1F25] hover:bg-[#272932] text-[#818CF8]">Reset</button></div>
+          </div>
         </div>`).join("");
       const allDebts = [...f.unsettled_debts, ...f.settled_debts];
+      window._debtsCache = allDebts;
       document.getElementById("debts-list").innerHTML = allDebts.length
-        ? allDebts.map((d) => `<div class="flex items-center justify-between p-2.5 rounded-xl border ${d.settled ? "bg-slate-950 border-slate-800 opacity-60" : "bg-rose-950/30 border-rose-500/40"}"><div><span class="font-semibold text-white">${d.borrower_name}</span> <span class="text-slate-400">· ${d.event_name}</span></div><div class="flex items-center gap-2"><span class="font-bold ${d.settled ? "text-emerald-400" : "text-rose-400"}">${fmtMYR(d.amount_myr)}</span>${d.settled ? `<span class="text-emerald-400">Paid</span>` : `<button onclick="settleDebt(${d.id})" class="px-2.5 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-white font-semibold">Mark Paid</button>`}<button onclick="deleteDebt(${d.id})" class="text-slate-400 hover:text-rose-400 font-bold px-1">&times;</button></div></div>`).join("")
+        ? allDebts.map((d) => {
+          const isIOwe = d.direction === "i_owe";
+          const matches = d.auto_matched_payments || [];
+          const hasInt = d.interest_type !== "none" && d.interest_rate_pct > 0;
+          return `
+          <div onclick="openDebtModal(${d.id})" class="cursor-pointer hover:border-amber-400/60 transition p-3 rounded-xl border ${d.settled ? "bg-slate-950 border-slate-800 opacity-65" : isIOwe ? "bg-amber-950/20 border-amber-500/40" : "bg-rose-950/20 border-rose-500/40"} space-y-2">
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <div class="flex flex-wrap items-center gap-1.5">
+                <span class="text-[10px] uppercase px-2 py-0.5 rounded-full font-semibold ${isIOwe ? "bg-amber-500/20 text-amber-300" : "bg-sky-500/20 text-sky-300"}">${isIOwe ? "I Owe" : "Owes Me"}</span>
+                <span class="font-semibold text-white">${_escTaste(d.borrower_name)}</span>
+                <span class="text-slate-400">· ${_escTaste(d.event_name)}</span>
+                ${d.monthly_installment_myr ? `<span class="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-emerald-300 font-mono-num">${fmtMYR(d.monthly_installment_myr)}/mo</span>` : ""}
+                ${hasInt ? `<span class="text-[10px] px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300">${d.interest_rate_pct}% ${d.interest_type}</span>` : ""}
+                ${!d.settled && d.paid_this_month ? `<span class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-semibold">Paid This Month</span>` : (!d.settled && d.due_day ? `<span class="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-200">Due Day ${d.due_day}</span>` : "")}
+              </div>
+              <div class="flex items-center gap-1.5" onclick="event.stopPropagation()">
+                <span class="font-bold font-mono-num ${d.settled ? "text-emerald-400" : isIOwe ? "text-amber-300" : "text-rose-400"}">${fmtMYR(d.remaining_myr)} left</span>
+                <span class="text-slate-500 font-mono-num">/ ${fmtMYR(d.total_payable_myr || d.amount_myr)}</span>
+                ${d.settled ? `<span class="text-emerald-400 font-semibold ml-1">Paid</span>` : `
+                  <button onclick="payDebt(${d.id}, ${d.monthly_installment_myr || d.remaining_myr})" class="px-2 py-1 rounded bg-sky-600 hover:bg-sky-500 text-white font-semibold">+ Pay</button>
+                  <button onclick="settleDebt(${d.id})" class="px-2 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-white font-semibold">Mark Paid</button>
+                `}
+                <button onclick="deleteDebt(${d.id})" class="text-slate-400 hover:text-rose-400 font-bold px-1">&times;</button>
+              </div>
+            </div>
+            <div class="w-full bg-slate-900 h-1.5 rounded-full overflow-hidden">
+              <div class="h-full ${d.settled ? "bg-emerald-500" : "bg-amber-400"}" style="width: ${d.progress_pct}%"></div>
+            </div>
+            <div class="flex flex-wrap justify-between gap-2 text-[11px] text-slate-400">
+              <span>Paid: ${fmtMYR(d.paid_myr)} (${d.progress_pct}%)${hasInt ? ` · Prin ${fmtMYR(d.principal_paid_myr)} + Int ${fmtMYR(d.interest_paid_myr)}` : ""}</span>
+              <span>${d.months_left !== null ? (d.months_left === 0 ? "Paid Off" : `${d.months_left} mo left · Est. ${d.estimated_payoff_date}`) : `Auto-match: ${_escTaste(d.match_keywords || d.borrower_name)}`}</span>
+            </div>
+            ${matches.length ? `<div class="text-[11px] text-emerald-300 bg-emerald-950/30 border border-emerald-500/20 rounded-lg px-2.5 py-1.5">Auto-detected ${matches.length} payment(s): ${matches.slice(0, 3).map((m) => `${m.occurred_at.slice(0, 10)} · ${_escTaste(m.merchant)} (${fmtMYR(m.amount_myr)})`).join(" · ")}</div>` : ""}
+          </div>`;
+        }).join("")
         : `<div class="text-slate-500">No debts recorded.</div>`;
+      runLoanCalculator();
+    }
+
+    let _lastCalcResult = null;
+    async function runLoanCalculator() {
+      const p = parseFloat(document.getElementById("calc-principal")?.value || "0");
+      const r = parseFloat(document.getElementById("calc-rate")?.value || "0");
+      const t = parseInt(document.getElementById("calc-tenure")?.value || "0", 10);
+      const itype = document.getElementById("calc-type")?.value || "reducing";
+      if (!p || !t || p <= 0 || t <= 0) return;
+      const res = await fetch("/api/friction/debts/calculate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ principal_myr: p, annual_rate_pct: r || 0, tenure_months: t, interest_type: itype }),
+      });
+      if (!res.ok) return;
+      const c = await res.json();
+      _lastCalcResult = c;
+      document.getElementById("calc-results-grid").innerHTML = `
+        <div class="p-3 rounded-xl bg-slate-950 border border-slate-800"><div class="text-slate-400 text-[11px]">Monthly Payment</div><div class="text-base font-bold text-amber-300 font-mono-num mt-0.5">${fmtMYR(c.monthly_installment_myr)}</div></div>
+        <div class="p-3 rounded-xl bg-slate-950 border border-slate-800"><div class="text-slate-400 text-[11px]">Total Interest</div><div class="text-base font-bold text-rose-400 font-mono-num mt-0.5">${fmtMYR(c.total_interest_myr)}</div></div>
+        <div class="p-3 rounded-xl bg-slate-950 border border-slate-800"><div class="text-slate-400 text-[11px]">Total Payable</div><div class="text-base font-bold text-white font-mono-num mt-0.5">${fmtMYR(c.total_payable_myr)}</div></div>
+        <div class="p-3 rounded-xl bg-slate-950 border border-slate-800"><div class="text-slate-400 text-[11px]">Effective APR</div><div class="text-base font-bold text-sky-300 font-mono-num mt-0.5">${c.effective_apr_pct}% / yr</div></div>
+      `;
+      document.getElementById("calc-schedule-body").innerHTML = c.schedule.map((row) => `
+        <tr>
+          <td class="p-2 text-slate-400">${row.month}</td>
+          <td class="p-2 text-right text-white">${fmtMYR(row.payment_myr)}</td>
+          <td class="p-2 text-right text-emerald-300">${fmtMYR(row.principal_myr)}</td>
+          <td class="p-2 text-right text-rose-300">${fmtMYR(row.interest_myr)}</td>
+          <td class="p-2 text-right text-slate-300">${fmtMYR(row.balance_myr)}</td>
+        </tr>
+      `).join("");
+    }
+
+    function applyCalcToDebtForm() {
+      if (!_lastCalcResult) return;
+      document.getElementById("debt-amt").value = _lastCalcResult.principal_myr;
+      document.getElementById("debt-monthly").value = _lastCalcResult.monthly_installment_myr;
+      document.getElementById("debt-int-type").value = _lastCalcResult.interest_type;
+      document.getElementById("debt-rate").value = _lastCalcResult.annual_rate_pct;
+      document.getElementById("debt-tenure").value = _lastCalcResult.tenure_months;
+      showToast("Applied calculated loan terms to form.", "ok");
+    }
+
+    let _activeDebtId = null;
+    function openDebtModal(debtId) {
+      const d = (window._debtsCache || []).find((x) => x.id === debtId);
+      if (!d) return;
+      _activeDebtId = d.id;
+      document.getElementById("dm-title").textContent = `${d.borrower_name} — ${d.event_name}`;
+      document.getElementById("dm-sub").textContent = `${d.direction === "i_owe" ? "I Borrowed" : "Owed to Me"} · ${d.interest_type !== "none" ? `${d.interest_rate_pct}% ${d.interest_type}` : "0% interest-free"}${d.months_left !== null ? ` · ${d.months_left} mo left (${d.estimated_payoff_date})` : ""}`;
+      document.getElementById("dm-stats").innerHTML = `
+        <div class="p-2.5 rounded-xl bg-slate-950 border border-slate-800"><div class="text-slate-400">Principal</div><div class="font-bold text-white font-mono-num">${fmtMYR(d.principal_myr || d.amount_myr)}</div></div>
+        <div class="p-2.5 rounded-xl bg-slate-950 border border-slate-800"><div class="text-slate-400">Total Interest</div><div class="font-bold text-rose-300 font-mono-num">${fmtMYR(d.total_interest_myr || 0)}</div></div>
+        <div class="p-2.5 rounded-xl bg-slate-950 border border-slate-800"><div class="text-slate-400">Paid (P+I)</div><div class="font-bold text-emerald-300 font-mono-num">${fmtMYR(d.paid_myr)}</div></div>
+        <div class="p-2.5 rounded-xl bg-slate-950 border border-slate-800"><div class="text-slate-400">Remaining</div><div class="font-bold text-amber-300 font-mono-num">${fmtMYR(d.remaining_myr)}</div></div>
+      `;
+      const matches = d.auto_matched_payments || [];
+      document.getElementById("dm-matches").innerHTML = matches.length
+        ? matches.map((m) => `
+          <div class="flex items-center justify-between p-2 rounded-lg bg-slate-950 border border-slate-800">
+            <span>${m.occurred_at.slice(0, 10)} · <strong class="text-white">${_escTaste(m.merchant)}</strong></span>
+            <div class="flex items-center gap-2">
+              <span class="font-mono-num text-emerald-300">${fmtMYR(m.amount_myr)}</span>
+              <button type="button" onclick="excludeDebtEntry(${d.id}, ${m.entry_id})" class="px-2 py-0.5 rounded bg-rose-700/50 hover:bg-rose-600 text-rose-100">Exclude</button>
+            </div>
+          </div>`).join("")
+        : `<div class="text-slate-500">No auto-matched Wealth Ledger payments yet.</div>`;
+
+      const sched = d.amortization_schedule || [];
+      const schedWrap = document.getElementById("dm-sched-wrap");
+      if (sched.length) {
+        schedWrap.classList.remove("hidden");
+        document.getElementById("dm-sched-body").innerHTML = sched.map((row) => `
+          <tr>
+            <td class="p-2 text-slate-400">${row.month}</td>
+            <td class="p-2 text-right text-white">${fmtMYR(row.payment_myr)}</td>
+            <td class="p-2 text-right text-emerald-300">${fmtMYR(row.principal_myr)}</td>
+            <td class="p-2 text-right text-rose-300">${fmtMYR(row.interest_myr)}</td>
+            <td class="p-2 text-right text-slate-300">${fmtMYR(row.balance_myr)}</td>
+          </tr>`).join("");
+      } else {
+        schedWrap.classList.add("hidden");
+      }
+
+      document.getElementById("dm-edit-person").value = d.borrower_name;
+      document.getElementById("dm-edit-event").value = d.event_name;
+      document.getElementById("dm-edit-amt").value = d.amount_myr;
+      document.getElementById("dm-edit-monthly").value = d.monthly_installment_myr || "";
+      document.getElementById("dm-edit-start").value = d.start_date || "";
+      document.getElementById("dm-edit-due").value = d.due_day || "";
+      document.getElementById("dm-edit-kw").value = d.match_keywords || "";
+      document.getElementById("dm-edit-match-amt").checked = !!d.match_installment_only;
+      document.getElementById("debt-detail-modal").classList.remove("hidden");
+    }
+    function closeDebtModal() {
+      document.getElementById("debt-detail-modal").classList.add("hidden");
+      _activeDebtId = null;
+    }
+    async function excludeDebtEntry(debtId, entryId) {
+      await fetch(`/api/friction/debts/${debtId}/exclude-entry`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ entry_id: entryId }),
+      });
+      await loadFriction();
+      openDebtModal(debtId);
+      showToast("Excluded payment from this debt.", "ok");
+    }
+    async function saveDebtEdit(e) {
+      e.preventDefault();
+      if (!_activeDebtId) return;
+      const mVal = parseFloat(document.getElementById("dm-edit-monthly").value);
+      const dueVal = parseInt(document.getElementById("dm-edit-due").value, 10);
+      const startVal = document.getElementById("dm-edit-start").value;
+      await fetch(`/api/friction/debts/${_activeDebtId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          borrower_name: document.getElementById("dm-edit-person").value.trim(),
+          event_name: document.getElementById("dm-edit-event").value.trim(),
+          amount_myr: parseFloat(document.getElementById("dm-edit-amt").value),
+          monthly_installment_myr: Number.isFinite(mVal) && mVal > 0 ? mVal : null,
+          start_date: startVal || null,
+          due_day: Number.isFinite(dueVal) && dueVal >= 1 ? dueVal : null,
+          match_keywords: document.getElementById("dm-edit-kw").value.trim(),
+          match_installment_only: document.getElementById("dm-edit-match-amt").checked,
+        }),
+      });
+      await loadFriction();
+      closeDebtModal();
+      showToast("Debt settings updated.", "ok");
+    }
+
+    async function createDebtEntry(e) {
+      e.preventDefault();
+      const monthlyVal = parseFloat(document.getElementById("debt-monthly").value);
+      const rateVal = parseFloat(document.getElementById("debt-rate").value);
+      const tenureVal = parseInt(document.getElementById("debt-tenure").value, 10);
+      const dueVal = parseInt(document.getElementById("debt-due").value, 10);
+      const startVal = document.getElementById("debt-start").value;
+      await fetch("/api/friction/debts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          direction: document.getElementById("debt-dir").value,
+          borrower_name: document.getElementById("debt-person").value.trim(),
+          event_name: document.getElementById("debt-event").value.trim(),
+          amount_myr: parseFloat(document.getElementById("debt-amt").value),
+          monthly_installment_myr: Number.isFinite(monthlyVal) && monthlyVal > 0 ? monthlyVal : null,
+          interest_type: document.getElementById("debt-int-type").value,
+          interest_rate_pct: Number.isFinite(rateVal) && rateVal >= 0 ? rateVal : 0,
+          tenure_months: Number.isFinite(tenureVal) && tenureVal >= 1 ? tenureVal : null,
+          start_date: startVal || null,
+          due_day: Number.isFinite(dueVal) && dueVal >= 1 ? dueVal : null,
+          match_keywords: document.getElementById("debt-kw").value.trim(),
+          match_installment_only: document.getElementById("debt-match-amt").checked,
+        }),
+      });
+      e.target.reset();
+      showToast("Debt tracker saved — matching payments will deduct automatically.", "ok");
+      await loadFriction();
+    }
+    async function payDebt(id, suggested) {
+      const raw = prompt("Enter repayment amount (RM):", suggested ? String(suggested) : "");
+      if (raw === null) return;
+      const amt = parseFloat(raw);
+      if (!Number.isFinite(amt) || amt <= 0) return;
+      await fetch(`/api/friction/debts/${id}/pay`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ amount_myr: amt }),
+      });
+      await loadFriction();
     }
     async function logOdometer(e) { e.preventDefault(); await fetch("/api/friction/odometer", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ odometer_km: parseFloat(document.getElementById("f-odo").value) }) }); e.target.reset(); await loadFriction(); }
     async function deleteOdometer(id) { await fetch(`/api/friction/odometer/${id}`, { method: "DELETE" }); await loadFriction(); }
@@ -5165,6 +6668,22 @@
       await _submitConflictResolution(keep_ids, delete_ids, `Kept ${keep_ids.length}, deleted ${delete_ids.length}.`);
     }
 
+    async function sendBriefingToWhatsApp() {
+      const btn = document.getElementById("as-wa-send-btn");
+      if (btn) { btn.disabled = true; btn.textContent = "Sending..."; }
+      try {
+        const res = await fetch("/api/assistant/send-briefing-whatsapp", { method: "POST" });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          showToast(data.detail || "Could not send to WhatsApp.", "err");
+          return;
+        }
+        showToast("Daily Focus Plan sent to your WhatsApp!", "ok");
+      } finally {
+        if (btn) { btn.disabled = false; btn.textContent = "Send to WhatsApp"; }
+      }
+    }
+
     async function loadAssistant() {
       const statusFilter = document.getElementById("as-status-filter")?.value ?? "pending";
       const [briefRes, itemsRes] = await Promise.all([
@@ -5188,28 +6707,207 @@
       if (itemsRes.ok) {
         const items = await itemsRes.json();
         window._assistantItemsCache = items;
-        document.getElementById("assistant-items-list").innerHTML = items.length
-          ? items.map((it) => `
-            <div onclick="openAssistantModal(${it.id})" class="cursor-pointer hover:border-amber-500/40 transition p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-1.5">
-              <div class="flex items-start justify-between gap-2">
-                <div>
-                  <div class="flex flex-wrap items-center gap-1.5">
-                    <span class="text-[10px] uppercase px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-semibold">${_escTaste(it.category)}</span>
-                    <span class="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-300">${_escTaste(it.source)} · ${_escTaste(it.sender)}</span>
-                    ${it.scheduled_for ? `<span class="text-[10px] px-2 py-0.5 rounded-full bg-sky-500/20 text-sky-300 font-medium">${_escTaste(it.scheduled_for)}</span>` : ""}
-                    ${it.attachment_data_url ? `<span class="text-[10px] px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 font-medium">Receipt / Image</span>` : ""}
-                    ${it.routed_to ? `<span class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300">→ ${_escTaste(it.routed_to)}</span>` : ""}
-                  </div>
-                  <div class="font-semibold text-white text-sm mt-1 ${it.status === "done" ? "line-through text-slate-500" : ""}">${_escTaste(it.title)}</div>
-                </div>
-                <div class="flex items-center gap-1.5 shrink-0" onclick="event.stopPropagation()">
-                  <button onclick="toggleAssistantDone(${it.id}, '${it.status === "done" ? "pending" : "done"}')" class="text-xs px-2 py-1 rounded-lg bg-slate-800 hover:bg-emerald-700 text-emerald-300">${it.status === "done" ? "Reopen" : "Done"}</button>
-                  <button onclick="deleteAssistantItem(${it.id})" class="text-xs px-2 py-1 rounded-lg bg-slate-800 hover:bg-rose-800 text-rose-300">&times;</button>
-                </div>
+        renderAssistantViews();
+      }
+    }
+
+    let _asViewMode = "list";
+    let _asCalYear = new Date().getFullYear();
+    let _asCalMonth = new Date().getMonth(); // 0-indexed
+    let _asSelectedDate = new Date().toISOString().slice(0, 10);
+
+    function _extractAsDateKey(it) {
+      const m = String(it.scheduled_for || "").match(/^(\d{4}-\d{2}-\d{2})/);
+      if (m) return m[1];
+      return "";
+    }
+
+    function _formatAsDateHeading(dateStr) {
+      if (!dateStr) return "Unscheduled / Anytime";
+      const todayStr = new Date().toISOString().slice(0, 10);
+      const tmr = new Date();
+      tmr.setDate(tmr.getDate() + 1);
+      const tmrStr = tmr.toISOString().slice(0, 10);
+      const d = new Date(`${dateStr}T00:00:00`);
+      const pretty = isNaN(d.getTime()) ? dateStr : d.toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short", year: "numeric" });
+      if (dateStr === todayStr) return `Today · ${pretty}`;
+      if (dateStr === tmrStr) return `Tomorrow · ${pretty}`;
+      return pretty;
+    }
+
+    function _categoryBadgeHtml(cat) {
+      const c = String(cat || "task").toLowerCase();
+      const cls = c === "question"
+        ? "bg-indigo-500/20 text-indigo-300"
+        : c === "pay"
+          ? "bg-rose-500/20 text-rose-300"
+          : c === "bank_statement"
+            ? "bg-emerald-500/20 text-emerald-300"
+            : (c === "planning" || c === "schedule")
+              ? "bg-amber-500/20 text-amber-300"
+              : c === "kitchen"
+                ? "bg-lime-500/20 text-lime-300"
+                : "bg-sky-500/20 text-sky-300";
+      return `<span class="text-[10px] uppercase px-2 py-0.5 rounded-full ${cls} font-semibold">${_escTaste(c.replace(/_/g, " "))}</span>`;
+    }
+
+    function _costTierBadgeHtml(tier) {
+      const t = tier || "low_cost";
+      const cls = t === "high_cost"
+        ? "bg-rose-500/20 text-rose-300"
+        : t === "medium_cost"
+          ? "bg-sky-500/20 text-sky-300"
+          : "bg-emerald-500/20 text-emerald-300";
+      return `<span class="text-[10px] px-2 py-0.5 rounded-full ${cls} font-medium">${_escTaste(t.replace("_", " "))}</span>`;
+    }
+
+    function _renderAssistantCardHtml(it) {
+      return `
+        <div onclick="openAssistantModal(${it.id})" class="cursor-pointer hover:border-amber-500/40 transition p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-1.5">
+          <div class="flex items-start justify-between gap-2">
+            <div>
+              <div class="flex flex-wrap items-center gap-1.5">
+                ${_categoryBadgeHtml(it.category)}
+                ${_costTierBadgeHtml(it.cost_tier)}
+                <span class="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-300">${_escTaste(it.source)} · ${_escTaste(it.sender)}</span>
+                ${it.scheduled_for ? `<span class="text-[10px] px-2 py-0.5 rounded-full bg-sky-500/20 text-sky-300 font-medium">${_escTaste(it.scheduled_for)}</span>` : ""}
+                ${it.attachment_data_url ? `<span class="text-[10px] px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 font-medium">Receipt / Image</span>` : ""}
+                ${it.routed_to ? `<span class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300">→ ${_escTaste(it.routed_to)}</span>` : ""}
               </div>
-              ${it.ai_plan ? `<pre class="text-xs text-slate-300 whitespace-pre-wrap font-sans bg-slate-900/70 rounded-lg p-2">${_escTaste(it.ai_plan)}</pre>` : ""}
-            </div>`).join("")
-          : `<div class="text-xs text-slate-500">No items yet. Forward a WhatsApp message or enter one on the left.</div>`;
+              <div class="font-semibold text-white text-sm mt-1 ${it.status === "done" ? "line-through text-slate-500" : ""}">${_escTaste(it.title)}</div>
+            </div>
+            <div class="flex items-center gap-1.5 shrink-0" onclick="event.stopPropagation()">
+              <button onclick="toggleAssistantDone(${it.id}, '${it.status === "done" ? "pending" : "done"}')" class="text-xs px-2 py-1 rounded-lg bg-slate-800 hover:bg-emerald-700 text-emerald-300">${it.status === "done" ? "Reopen" : "Done"}</button>
+              <button onclick="deleteAssistantItem(${it.id})" class="text-xs px-2 py-1 rounded-lg bg-slate-800 hover:bg-rose-800 text-rose-300">&times;</button>
+            </div>
+          </div>
+          ${it.ai_plan ? `<pre class="text-xs text-slate-300 whitespace-pre-wrap font-sans bg-slate-900/70 rounded-lg p-2">${_escTaste(it.ai_plan)}</pre>` : ""}
+        </div>`;
+    }
+
+    function switchAssistantView(mode) {
+      _asViewMode = mode === "calendar" ? "calendar" : "list";
+      const listEl = document.getElementById("assistant-items-list");
+      const calEl = document.getElementById("assistant-calendar-wrap");
+      const btnList = document.getElementById("as-btn-list");
+      const btnCal = document.getElementById("as-btn-calendar");
+      if (_asViewMode === "calendar") {
+        listEl.classList.add("hidden");
+        calEl.classList.remove("hidden");
+        btnCal.className = "px-2.5 py-1 rounded-md bg-amber-600 text-white font-semibold";
+        btnList.className = "px-2.5 py-1 rounded-md text-slate-400 hover:text-white";
+      } else {
+        calEl.classList.add("hidden");
+        listEl.classList.remove("hidden");
+        btnList.className = "px-2.5 py-1 rounded-md bg-amber-600 text-white font-semibold";
+        btnCal.className = "px-2.5 py-1 rounded-md text-slate-400 hover:text-white";
+      }
+      renderAssistantViews();
+    }
+
+    function stepAssistantCalMonth(delta) {
+      _asCalMonth += delta;
+      if (_asCalMonth < 0) { _asCalMonth = 11; _asCalYear -= 1; }
+      else if (_asCalMonth > 11) { _asCalMonth = 0; _asCalYear += 1; }
+      renderAssistantViews();
+    }
+
+    function selectAssistantCalDay(dateStr) {
+      _asSelectedDate = dateStr;
+      renderAssistantViews();
+    }
+
+    function renderAssistantViews() {
+      const catFilter = document.getElementById("as-cat-filter")?.value || "";
+      const allItems = window._assistantItemsCache || [];
+      const chatCountEl = document.getElementById("as-chat-count");
+      if (chatCountEl) chatCountEl.textContent = allItems.filter((it) => it.category === "question").length;
+      const items = catFilter
+        ? allItems.filter((it) => it.category === catFilter)
+        : allItems.filter((it) => it.category !== "question");
+      const scheduledItems = items.filter((it) => !!_extractAsDateKey(it));
+      const unscheduledItems = items.filter((it) => !_extractAsDateKey(it) && it.category !== "question");
+
+      const unschedCountEl = document.getElementById("as-unsched-count");
+      if (unschedCountEl) unschedCountEl.textContent = unscheduledItems.length;
+      const unschedListEl = document.getElementById("assistant-unscheduled-list");
+      if (unschedListEl) {
+        unschedListEl.innerHTML = unscheduledItems.length
+          ? unscheduledItems.map(_renderAssistantCardHtml).join("")
+          : `<div class="text-xs text-slate-500">No unscheduled items.</div>`;
+      }
+
+      if (_asViewMode === "list") {
+        if (!scheduledItems.length) {
+          document.getElementById("assistant-items-list").innerHTML = `<div class="text-xs text-slate-500">No dated items yet. Type below or forward a WhatsApp message with a date/time.</div>`;
+          return;
+        }
+        const groups = new Map();
+        for (const it of scheduledItems) {
+          const dk = _extractAsDateKey(it);
+          if (!groups.has(dk)) groups.set(dk, []);
+          groups.get(dk).push(it);
+        }
+        const sortedKeys = Array.from(groups.keys()).sort((a, b) => a.localeCompare(b));
+        const nowDt = new Date();
+        const todayStr = `${nowDt.getFullYear()}-${String(nowDt.getMonth() + 1).padStart(2, "0")}-${String(nowDt.getDate()).padStart(2, "0")}`;
+        document.getElementById("assistant-items-list").innerHTML = sortedKeys.map((dk) => {
+          const gItems = groups.get(dk);
+          const isToday = dk === todayStr;
+          return `
+            <details ${isToday ? "open" : ""} class="group rounded-xl border ${isToday ? "border-amber-500/40 bg-amber-950/10" : "border-slate-800 bg-slate-950/40"}">
+              <summary class="cursor-pointer list-none flex items-center justify-between px-3.5 py-2.5 select-none">
+                <div class="flex items-center gap-2.5">
+                  <span class="text-slate-400 text-xs transition-transform group-open:rotate-90">&#9654;</span>
+                  <span class="text-base font-bold ${isToday ? "text-amber-300" : "text-white"}">${_escTaste(_formatAsDateHeading(dk))}</span>
+                </div>
+                <span class="text-xs font-semibold px-2.5 py-0.5 rounded-full ${isToday ? "bg-amber-500/20 text-amber-300" : "bg-slate-800 text-slate-300"}">${gItems.length} to do</span>
+              </summary>
+              <div class="px-3 pb-3 pt-1 space-y-2">${gItems.map(_renderAssistantCardHtml).join("")}</div>
+            </details>`;
+        }).join("");
+      } else {
+        const monthLabel = new Date(_asCalYear, _asCalMonth, 1).toLocaleDateString(undefined, { month: "long", year: "numeric" });
+        document.getElementById("as-cal-month-label").textContent = monthLabel;
+
+        const countsByDate = {};
+        for (const it of scheduledItems) {
+          const dk = _extractAsDateKey(it);
+          if (dk) {
+            if (!countsByDate[dk]) countsByDate[dk] = [];
+            countsByDate[dk].push(it);
+          }
+        }
+
+        const firstDay = new Date(_asCalYear, _asCalMonth, 1);
+        const startOffset = (firstDay.getDay() + 6) % 7; // Monday = 0
+        const daysInMonth = new Date(_asCalYear, _asCalMonth + 1, 0).getDate();
+        const todayStr = new Date().toISOString().slice(0, 10);
+
+        const cells = [];
+        for (let i = 0; i < startOffset; i++) {
+          cells.push(`<div class="h-14 rounded-lg bg-slate-950/30 border border-slate-800/30"></div>`);
+        }
+        for (let day = 1; day <= daysInMonth; day++) {
+          const mm = String(_asCalMonth + 1).padStart(2, "0");
+          const dd = String(day).padStart(2, "0");
+          const dateStr = `${_asCalYear}-${mm}-${dd}`;
+          const dayItems = countsByDate[dateStr] || [];
+          const isSelected = dateStr === _asSelectedDate;
+          const isToday = dateStr === todayStr;
+          cells.push(`
+            <button type="button" onclick="selectAssistantCalDay('${dateStr}')" class="h-14 p-1.5 rounded-lg border text-left flex flex-col justify-between transition ${isSelected ? "bg-amber-950/50 border-amber-400" : dayItems.length ? "bg-slate-950 border-sky-500/40 hover:border-sky-400" : "bg-slate-950/70 border-slate-800 hover:border-slate-700"}">
+              <span class="text-xs font-bold ${isToday ? "text-emerald-400" : "text-slate-200"}">${day}</span>
+              ${dayItems.length ? `<span class="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 font-semibold self-end">${dayItems.length} to do</span>` : ""}
+            </button>`);
+        }
+        document.getElementById("as-cal-grid").innerHTML = cells.join("");
+
+        const selectedItems = countsByDate[_asSelectedDate] || [];
+        document.getElementById("as-cal-day-title").textContent = `${_formatAsDateHeading(_asSelectedDate)} — ${selectedItems.length} thing${selectedItems.length === 1 ? "" : "s"} to do`;
+        document.getElementById("as-cal-day-items").innerHTML = selectedItems.length
+          ? selectedItems.map(_renderAssistantCardHtml).join("")
+          : `<div class="text-xs text-slate-500">Nothing scheduled on this date.</div>`;
       }
     }
 
@@ -5219,11 +6917,20 @@
       if (!it) return;
       _activeAssistantItem = it;
       document.getElementById("as-modal-badges").innerHTML = `
-        <span class="text-[10px] uppercase px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-semibold">${_escTaste(it.category)}</span>
+        ${_categoryBadgeHtml(it.category)}
+        ${_costTierBadgeHtml(it.cost_tier)}
         <span class="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-300">${_escTaste(it.source)} · ${_escTaste(it.sender)}</span>
         <span class="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-sky-300">${_escTaste(it.engine)}</span>
         ${it.scheduled_for ? `<span class="text-[10px] px-2 py-0.5 rounded-full bg-sky-500/20 text-sky-300">${_escTaste(it.scheduled_for)}</span>` : ""}
       `;
+      const planLabelEl = document.getElementById("as-modal-plan-label");
+      if (planLabelEl) {
+        planLabelEl.textContent = it.category === "question"
+          ? "AI Answer & Explanation"
+          : it.category === "bank_statement"
+            ? "Bank Statement Import Summary"
+            : "AI Plan & Thinking";
+      }
       document.getElementById("as-modal-title").textContent = it.title;
       document.getElementById("as-modal-plan").textContent = it.ai_plan || "No AI plan generated.";
       document.getElementById("as-modal-raw").textContent = it.raw_message;
@@ -5242,6 +6949,70 @@
     function closeAssistantModal() {
       document.getElementById("assistant-detail-modal").classList.add("hidden");
       _activeAssistantItem = null;
+    }
+    async function openAssistantChatHistory() {
+      const modal = document.getElementById("assistant-chat-modal");
+      const body = document.getElementById("as-chat-history-body");
+      if (!modal || !body) return;
+      modal.classList.remove("hidden");
+      body.innerHTML = `<div class="text-xs text-slate-400">Loading chat history...</div>`;
+      try {
+        const res = await fetch("/api/assistant/items");
+        const allItems = res.ok ? await res.json() : (window._assistantItemsCache || []);
+        const chats = allItems.filter((it) => it.category === "question");
+        renderAssistantChatHistory(chats);
+      } catch (_) {
+        const chats = (window._assistantItemsCache || []).filter((it) => it.category === "question");
+        renderAssistantChatHistory(chats);
+      }
+    }
+    function closeAssistantChatHistory() {
+      const modal = document.getElementById("assistant-chat-modal");
+      if (modal) modal.classList.add("hidden");
+    }
+    function renderAssistantChatHistory(chats) {
+      const body = document.getElementById("as-chat-history-body");
+      const countEl = document.getElementById("as-chat-modal-count");
+      const badgeEl = document.getElementById("as-chat-count");
+      if (countEl) countEl.textContent = chats.length;
+      if (badgeEl) badgeEl.textContent = chats.length;
+      if (!body) return;
+      if (!chats.length) {
+        body.innerHTML = `<div class="text-xs text-slate-500 text-center py-8">No questions or AI chats yet. Ask anything in the bar below or on WhatsApp!</div>`;
+        return;
+      }
+      body.innerHTML = chats.map((it) => {
+        const ts = it.created_at ? new Date(it.created_at).toLocaleString() : "";
+        return `
+          <div class="space-y-2 pb-3 border-b border-slate-800/70 last:border-b-0">
+            <div class="flex justify-end">
+              <div class="max-w-[85%] rounded-2xl rounded-br-sm bg-emerald-900/50 border border-emerald-500/30 px-3.5 py-2 text-xs text-emerald-50 space-y-1">
+                <div class="flex items-center justify-between gap-3 text-[10px] text-emerald-300/80">
+                  <span>${_escTaste(it.source)} &middot; ${_escTaste(it.sender)}</span>
+                  <span>${_escTaste(ts)}</span>
+                </div>
+                <div class="whitespace-pre-wrap">${_escTaste(it.raw_message)}</div>
+              </div>
+            </div>
+            <div class="flex justify-start">
+              <div class="max-w-[90%] rounded-2xl rounded-bl-sm bg-slate-900 border border-slate-700/80 px-3.5 py-2.5 text-xs text-slate-200 space-y-1.5">
+                <div class="flex items-center justify-between gap-2">
+                  <div class="font-semibold text-indigo-300">${_escTaste(it.title)}</div>
+                  <button type="button" onclick="deleteAssistantChatItem(${it.id})" class="text-[11px] px-1.5 py-0.5 rounded bg-slate-800 hover:bg-rose-800 text-rose-300" title="Delete chat">&times;</button>
+                </div>
+                <pre class="whitespace-pre-wrap font-sans text-slate-200 leading-relaxed">${_escTaste(it.ai_plan || "")}</pre>
+                <div class="flex flex-wrap items-center gap-1.5 pt-1 text-[10px] text-slate-400">
+                  ${_costTierBadgeHtml(it.cost_tier)}
+                  <span class="px-2 py-0.5 rounded-full bg-slate-800 text-sky-300">${_escTaste(it.engine)}</span>
+                </div>
+              </div>
+            </div>
+          </div>`;
+      }).join("");
+    }
+    async function deleteAssistantChatItem(id) {
+      await deleteAssistantItem(id);
+      await openAssistantChatHistory();
     }
     async function reanalyzeActiveAssistantItem() {
       if (!_activeAssistantItem) return;
@@ -5284,7 +7055,7 @@
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             raw_message: document.getElementById("as-raw").value.trim(),
-            sender: document.getElementById("as-sender").value.trim() || "Me",
+            sender: "Me",
             source: "manual",
           }),
         });
@@ -5380,5 +7151,29 @@
         .catch(() => {});
     }
   </script>
+
+  <div id="receipt-items-modal" class="hidden fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4" onclick="if (event.target === this) closeReceiptItemsModal()">
+    <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-lg w-full max-h-[82vh] flex flex-col shadow-2xl overflow-hidden">
+      <div class="flex items-start justify-between gap-3 px-5 py-3.5 border-b border-slate-800">
+        <div>
+          <h3 id="rim-merchant" class="text-sm font-bold text-white"></h3>
+          <div id="rim-meta" class="text-[11px] text-slate-400 mt-0.5"></div>
+        </div>
+        <button type="button" onclick="closeReceiptItemsModal()" class="text-slate-400 hover:text-white text-xl leading-none px-1">&times;</button>
+      </div>
+      <div class="p-4 overflow-y-auto flex-1">
+        <table class="w-full text-xs">
+          <thead>
+            <tr class="text-[11px] text-slate-400 border-b border-slate-800">
+              <th class="pb-2 text-left font-semibold">Item Bought</th>
+              <th class="pb-2 text-right font-semibold">Qty</th>
+              <th class="pb-2 text-right font-semibold">Price</th>
+            </tr>
+          </thead>
+          <tbody id="rim-items-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
 </body>
 </html>

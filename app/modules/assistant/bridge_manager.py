@@ -40,11 +40,17 @@ def start_bridge() -> bool:
         return False
 
     try:
+        popen_kwargs: dict = {
+            "cwd": str(_BRIDGE_DIR),
+            "stdin": subprocess.DEVNULL,
+            "stdout": None,
+            "stderr": None,
+        }
+        if sys.platform == "win32":
+            popen_kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
         _proc = subprocess.Popen(
             [node_bin, "index.js"],
-            cwd=str(_BRIDGE_DIR),
-            stdout=None,
-            stderr=None,
+            **popen_kwargs,
         )
         logger.info("Started WhatsApp Web Bridge subprocess (pid=%s).", _proc.pid)
         return True

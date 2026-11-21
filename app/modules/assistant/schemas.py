@@ -8,6 +8,9 @@ class AssistantIngestRequest(BaseModel):
     sender: str = Field(default="Me", max_length=128)
     image_base64: str = Field(default="")
     image_mime: str = Field(default="image/jpeg", max_length=64)
+    document_base64: str = Field(default="")
+    document_filename: str = Field(default="", max_length=255)
+    document_mime: str = Field(default="", max_length=128)
 
 
 class AssistantItemUpdate(BaseModel):
@@ -29,7 +32,9 @@ class AssistantItemOut(BaseModel):
     status: str
     routed_to: str
     engine: str
+    cost_tier: str = "low_cost"
     attachment_data_url: str = ""
+    whatsapp_reply: str = ""
     created_at: datetime
 
 

@@ -1,5 +1,5 @@
-from datetime import datetime, timezone
-from sqlalchemy import Boolean, CheckConstraint, DateTime, Float, Integer, String, Text, UniqueConstraint
+from datetime import date, datetime, timezone
+from sqlalchemy import Boolean, CheckConstraint, Date, DateTime, Float, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base, get_current_user_id
@@ -61,6 +61,17 @@ class SocialDebt(Base):
     event_name: Mapped[str] = mapped_column(String(255), default="San Guo Sha Night", nullable=False)
     borrower_name: Mapped[str] = mapped_column(String(128), nullable=False)
     amount_myr: Mapped[float] = mapped_column(Float, nullable=False)
+    direction: Mapped[str] = mapped_column(String(16), default="owed_to_me", nullable=False)
+    manual_paid_myr: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
+    monthly_installment_myr: Mapped[float | None] = mapped_column(Float, nullable=True)
+    match_keywords: Mapped[str] = mapped_column(String(255), default="", nullable=False)
+    start_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    due_day: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    match_installment_only: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    excluded_entry_ids: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    interest_rate_pct: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
+    interest_type: Mapped[str] = mapped_column(String(16), default="none", nullable=False)
+    tenure_months: Mapped[int | None] = mapped_column(Integer, nullable=True)
     settled: Mapped[bool] = mapped_column(Boolean, default=False, index=True, nullable=False)
     settled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, nullable=False)

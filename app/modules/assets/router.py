@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.modules.assets import service
+from app.modules.assets.ai_valuator import AIValuationError
 from app.modules.assets.schemas import AssetOut, CreateAssetRequest, NetWorthSummary, ParseListingsRequest, ValuationOut
 from app.modules.assets.scraper import CarousellBlockedError
 
@@ -29,22 +30,32 @@ def delete_asset(asset_id: int, db: Session = Depends(get_db)):
     return {"deleted": True}
 
 
+@router.post("/refresh-all", response_model=list[AssetOut])
+def refresh_all(db: Session = Depends(get_db)):
+    try:
+        return service.refresh_all_assets(db)
+    except (AIValuationError, CarousellBlockedError) as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
 @router.post("/scrape-all", response_model=list[AssetOut])
 def scrape_all(db: Session = Depends(get_db)):
+    return refresh_all(db)
+
+
+@router.post("/{asset_id}/refresh", response_model=ValuationOut)
+def refresh_one(asset_id: int, db: Session = Depends(get_db)):
     try:
-        return service.scrape_all_assets(db)
-    except CarousellBlockedError as exc:
+        return service.refresh_asset(db, asset_id)
+    except (AIValuationError, CarousellBlockedError) as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 @router.post("/{asset_id}/scrape", response_model=ValuationOut)
 def scrape_one(asset_id: int, db: Session = Depends(get_db)):
-    try:
-        return service.scrape_asset(db, asset_id)
-    except CarousellBlockedError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
-    except ValueError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return refresh_one(asset_id, db)
 
 
 @router.post("/{asset_id}/parse-listings", response_model=ValuationOut)
@@ -63,4 +74,3 @@ def get_history(asset_id: int, db: Session = Depends(get_db)):
 @router.get("/net-worth", response_model=NetWorthSummary)
 def get_net_worth(db: Session = Depends(get_db)):
     return service.get_net_worth(db)
-

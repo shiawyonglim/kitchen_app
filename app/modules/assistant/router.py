@@ -50,8 +50,18 @@ def delete_assistant_item(item_id: int, db: Session = Depends(get_db)):
 
 
 @router.get("/morning-briefing", response_model=MorningBriefingOut)
-def morning_briefing(db: Session = Depends(get_db)):
-    return service.get_morning_briefing(db)
+def morning_briefing(force: bool = False, db: Session = Depends(get_db)):
+    return service.get_morning_briefing(db, force=force)
+
+
+@router.post("/send-briefing-whatsapp")
+def send_briefing_whatsapp(db: Session = Depends(get_db)):
+    try:
+        return service.send_briefing_to_whatsapp(db)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
 @router.get("/whatsapp-status")

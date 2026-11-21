@@ -234,17 +234,31 @@ def synthesize_dinner_recipe(db: Session) -> DinnerRecipeOut:
             models = tags_resp.json().get("models", []) if tags_resp.status_code == 200 else []
             model_name = models[0]["name"] if models else None
         if model_name:
+            import time as _time
+            from app.modules.settings.ai_usage import record_ai_usage
+
+            t0 = _time.monotonic()
             with httpx.Client(timeout=15.0) as client:
                 resp = client.post(
                     "http://127.0.0.1:11434/api/generate",
                     json={"model": model_name, "prompt": prompt, "stream": False},
                 )
                 if resp.status_code == 200 and resp.json().get("response"):
+                    rjson = resp.json()
+                    record_ai_usage(
+                        "ollama",
+                        model_name,
+                        "kitchen_recipe",
+                        status="ok",
+                        input_tokens=int(rjson.get("prompt_eval_count") or 0),
+                        output_tokens=int(rjson.get("eval_count") or 0),
+                        latency_ms=int((_time.monotonic() - t0) * 1000),
+                    )
                     return DinnerRecipeOut(
                         title=f"RTX 4060 Taste-Aware Chef ({model_name})",
                         used_expiring_items=expiring,
                         recovery_additions=target.recommended_additions,
-                        instructions=resp.json()["response"].strip(),
+                        instructions=rjson["response"].strip(),
                         engine="ollama_local",
                         taste_notes=taste_notes,
                         applied_rule_ids=applied_rule_ids,

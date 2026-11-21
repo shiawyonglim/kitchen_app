@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
@@ -6,7 +6,7 @@ from app.database import Base
 from app.modules.assistant import service as assistant_service
 from app.modules.assistant.schemas import AssistantIngestRequest
 from app.modules.friction import service as friction_service
-from app.modules.friction.schemas import LogOdometerRequest
+from app.modules.friction.schemas import CreateDebtRequest, LogOdometerRequest, UpdateDebtRequest
 from app.modules.kitchen import service as kitchen_service
 from app.modules.kitchen import taste as kitchen_taste
 from app.modules.kitchen.schemas import (
@@ -394,6 +394,7 @@ def test_kitchen_auto_profile_cooked_deduct_staples_and_shopping_list():
 def test_assistant_ingest_routing_and_morning_briefing(monkeypatch):
     from app.config import settings as app_settings
     monkeypatch.setattr(app_settings, "groq_api_key", "")
+    monkeypatch.setattr(app_settings, "nvidia_api_key", "")
     db = _make_session()
     sched = assistant_service.ingest_message(
         db,
@@ -451,8 +452,364 @@ def test_assistant_ingest_routing_and_morning_briefing(monkeypatch):
             image_mime="image/png",
         ),
     )[0]
+    assert img_item.cost_tier == "high_cost"
     assert img_item.attachment_data_url.startswith("data:image/png;base64,")
     assert "[Attached Image/Receipt]:" in img_item.raw_message
     reanalyzed = assistant_service.reanalyze_item(db, img_item.id)
     assert reanalyzed is not None and reanalyzed.id == img_item.id
+
+
+def test_friction_i_owe_auto_repayment_detection():
+    db = _make_session()
+    debt = friction_service.create_debt(
+        db,
+        CreateDebtRequest(
+            event_name="Personal Loan",
+            borrower_name="Lim Shu Ting",
+            amount_myr=2000.00,
+            direction="i_owe",
+            monthly_installment_myr=83.40,
+        ),
+    )
+    assert debt.remaining_myr == 2000.00
+    assert debt.direction == "i_owe"
+
+    # Two monthly transfers to LIM SHU TING in Wealth Ledger
+    for idx in range(2):
+        wealth_service.add_manual_entry(
+            db,
+            ManualLedgerRequest(
+                merchant=f"DuitNow Transfer LIM SHU TING #{idx+1}",
+                category="P2P Transfer Out",
+                tx_type="expense",
+                amount_myr=83.40,
+                occurred_at=datetime.now(timezone.utc),
+            ),
+        )
+
+    summary = friction_service.get_summary(db)
+    lim_debt = next(d for d in summary.unsettled_debts if d.id == debt.id)
+    assert lim_debt.paid_myr == 166.80
+    assert lim_debt.remaining_myr == 1833.20
+    assert len(lim_debt.auto_matched_payments) == 2
+    assert summary.total_i_owe_myr == 1833.20
+
+    # Manual payoff of the remaining balance auto-settles the debt
+    paid = friction_service.pay_debt(db, debt.id, 1833.20)
+    assert paid.settled is True
+    assert paid.remaining_myr == 0.0
+    assert friction_service.get_summary(db).total_i_owe_myr == 0.0
+
+
+def test_debt_interest_calculator_backfill_tolerance_and_exclude():
+    db = _make_session()
+    # Loan calculator: reducing vs flat
+    red = friction_service.calculate_loan(2000.0, 6.0, 24, "reducing")
+    flat = friction_service.calculate_loan(2000.0, 6.0, 24, "flat")
+    assert len(red.schedule) == 24 and red.schedule[-1].balance_myr == 0.0
+    assert flat.total_interest_myr == 240.0
+    assert flat.total_payable_myr == 2240.0
+    assert flat.effective_apr_pct > flat.annual_rate_pct
+
+    # Backfill from 60 days ago, with match_installment_only=True
+    past_dt = datetime.now(timezone.utc) - timedelta(days=30)
+    installment_entry = wealth_service.add_manual_entry(
+        db,
+        ManualLedgerRequest(
+            merchant="DuitNow LIM SHU TING",
+            category="P2P Transfer Out",
+            tx_type="expense",
+            amount_myr=83.40,
+            occurred_at=past_dt,
+        ),
+    )
+    dinner_entry = wealth_service.add_manual_entry(
+        db,
+        ManualLedgerRequest(
+            merchant="DuitNow LIM SHU TING Dinner",
+            category="Food & Beverage",
+            tx_type="expense",
+            amount_myr=25.00,
+            occurred_at=datetime.now(timezone.utc),
+        ),
+    )
+
+    debt = friction_service.create_debt(
+        db,
+        CreateDebtRequest(
+            event_name="Loan with Interest",
+            borrower_name="Lim Shu Ting",
+            amount_myr=2000.00,
+            direction="i_owe",
+            monthly_installment_myr=83.40,
+            start_date=date.today() - timedelta(days=60),
+            due_day=25,
+            match_installment_only=True,
+            interest_type="flat",
+            interest_rate_pct=5.0,
+            tenure_months=24,
+        ),
+    )
+    # Only the RM 83.40 backfill matches (RM 25.00 dinner ignored)
+    assert debt.paid_myr == 83.40
+    assert len(debt.auto_matched_payments) == 1
+    assert debt.total_interest_myr == 200.00
+    assert debt.total_payable_myr == 2200.00
+    assert debt.months_left is not None and debt.months_left > 0
+
+    # Excluding the matched entry removes it from paid_myr
+    excluded = friction_service.exclude_debt_entry(db, debt.id, installment_entry.id)
+    assert excluded.paid_myr == 0.0
+    assert len(excluded.auto_matched_payments) == 0
+
+    # Update debt due_day
+    updated = friction_service.update_debt(db, debt.id, UpdateDebtRequest(due_day=15))
+    assert updated.due_day == 15
+    assert dinner_entry.id is not None
+
+
+def test_assistant_multi_intent_classification_and_bank_statement_import(monkeypatch):
+    import base64
+    from app.config import settings as app_settings
+
+    monkeypatch.setattr(app_settings, "groq_api_key", "")
+    monkeypatch.setattr(app_settings, "nvidia_api_key", "")
+    monkeypatch.setattr(app_settings, "gemini_api_key", "")
+
+    db = _make_session()
+
+    pay_item = assistant_service.ingest_message(
+        db,
+        AssistantIngestRequest(raw_message="Pay Christie RM 45 for lunch", source="whatsapp", sender="Me"),
+    )[0]
+    assert pay_item.category == "pay"
+
+    plan_item = assistant_service.ingest_message(
+        db,
+        AssistantIngestRequest(raw_message="Plan a 3-day Penang road trip itinerary", source="whatsapp", sender="Me"),
+    )[0]
+    assert plan_item.category == "planning"
+
+    msg_q = assistant_service.ingest_message(
+        db,
+        AssistantIngestRequest(
+            raw_message="My colleague texted 'We need to talk Monday' - what does that message mean?",
+            source="whatsapp",
+            sender="Me",
+        ),
+    )[0]
+    assert msg_q.category == "question"
+    assert msg_q.whatsapp_reply != ""
+    assert "Reply by:" in msg_q.whatsapp_reply
+
+    typo_q = assistant_service.ingest_message(
+        db,
+        AssistantIngestRequest(raw_message="How is hitler", source="whatsapp", sender="Me"),
+    )[0]
+    assert typo_q.category == "question"
+    assert typo_q.cost_tier == "medium_cost"
+    assert "Reply by:" in typo_q.whatsapp_reply
+
+    math_q = assistant_service.ingest_message(
+        db,
+        AssistantIngestRequest(
+            raw_message="Solve 2x + 5 = 19 step by step",
+            source="whatsapp",
+            sender="Me",
+        ),
+    )[0]
+    assert math_q.category == "question"
+    assert math_q.cost_tier == "high_cost"
+    assert math_q.whatsapp_reply != ""
+    assert "7" in math_q.ai_plan
+
+    csv_bytes = (
+        "Date,Description,Debit,Credit\n"
+        "02/11/2026,DuitNow QR Jaya Grocer,45.80,\n"
+        "05/11/2026,AI Freelance Wise Payout,,3200.00\n"
+    ).encode("utf-8")
+    stmt_item = assistant_service.ingest_message(
+        db,
+        AssistantIngestRequest(
+            raw_message="",
+            source="whatsapp",
+            sender="Me",
+            document_base64=base64.b64encode(csv_bytes).decode("ascii"),
+            document_filename="ryt_nov.csv",
+            document_mime="text/csv",
+        ),
+    )[0]
+    assert stmt_item.category == "bank_statement"
+    assert stmt_item.routed_to == "wealth_ledger"
+    assert stmt_item.status == "done"
+    assert "Inserted +2" in stmt_item.ai_plan
+    assert stmt_item.whatsapp_reply != ""
+
+
+def test_assistant_quota_429_cross_tier_fallback(monkeypatch):
+    from app.config import settings as app_settings
+    from app.modules.assistant import ai_planner
+
+    ai_planner._MODEL_COOLDOWN_UNTIL.clear()
+    monkeypatch.setattr(app_settings, "groq_api_key", "gsk_test_dummy")
+    monkeypatch.setattr(app_settings, "nvidia_api_key", "")
+    monkeypatch.setattr(app_settings, "gemini_api_key", "")
+
+    tried_models: list[str] = []
+
+    class _FakeResp:
+        def __init__(self, status_code: int, payload: dict | None = None, headers: dict | None = None):
+            self.status_code = status_code
+            self._payload = payload or {}
+            self.headers = headers or {}
+
+        def json(self):
+            return self._payload
+
+    class _FakeClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def get(self, url, *args, **kwargs):
+            return _FakeResp(404)
+
+        def post(self, url, headers=None, json=None, **kwargs):
+            model = (json or {}).get("model", "")
+            tried_models.append(model)
+            # Simulate medium_cost + high_cost Groq quota exhausted (429), low_cost succeeds
+            if model in (app_settings.groq_model, "qwen/qwen3.8-27b", "openai/gpt-oss-120b"):
+                return _FakeResp(429, headers={"retry-after": "120"})
+            return _FakeResp(
+                200,
+                {
+                    "choices": [
+                        {
+                            "message": {
+                                "content": (
+                                    '{"plans": [{"merge_into_id": null, "category": "question", '
+                                    '"title": "Who is Hitler?", "ai_plan": "Adolf Hitler was...", '
+                                    '"scheduled_for": "", "priority": "normal", "kitchen_items": []}]}'
+                                )
+                            }
+                        }
+                    ]
+                },
+            )
+
+    monkeypatch.setattr(ai_planner.httpx, "Client", _FakeClient)
+    plans = ai_planner.analyze_messages("How is hitler", sender="Me", recent_pending=[])
+    assert len(plans) == 1
+    assert plans[0]["category"] == "question"
+    assert plans[0]["cost_tier"] == "low_cost"
+    assert plans[0]["engine"] == "groq:gpt-oss-20b"
+    assert ("groq", app_settings.groq_model) in ai_planner._MODEL_COOLDOWN_UNTIL
+    assert "openai/gpt-oss-120b" in tried_models
+    assert "openai/gpt-oss-20b" in tried_models
+    ai_planner._MODEL_COOLDOWN_UNTIL.clear()
+
+
+def test_assistant_whole_app_asset_debt_and_kitchen_matrix(monkeypatch):
+    from app.config import settings as app_settings
+    from app.modules.assets import service as assets_service
+    from app.modules.friction import service as friction_service
+    from app.modules.kitchen.schemas import AddKitchenItemRequest
+
+    monkeypatch.setattr(app_settings, "groq_api_key", "")
+    monkeypatch.setattr(app_settings, "nvidia_api_key", "")
+    monkeypatch.setattr(app_settings, "gemini_api_key", "")
+    db = _make_session()
+
+    asset_res = assistant_service.ingest_message(
+        db,
+        AssistantIngestRequest(raw_message="I bought a Honda Civic for RM120000", source="whatsapp", sender="Me"),
+    )[0]
+    assert asset_res.routed_to == "asset_tracker"
+    assert asset_res.status == "done"
+    assert "Added to Assets" in asset_res.whatsapp_reply
+    assert any("Honda Civic" in a.name and a.purchase_price_myr == 120000.0 for a in assets_service.list_assets(db))
+
+    debt_res = assistant_service.ingest_message(
+        db,
+        AssistantIngestRequest(
+            raw_message="I took a RM80000 car loan from Public Bank at 3.2% flat for 7 years",
+            source="whatsapp",
+            sender="Me",
+        ),
+    )[0]
+    assert debt_res.routed_to == "debt_tracker"
+    assert debt_res.status == "done"
+    assert "Added to Debt Tracker" in debt_res.whatsapp_reply
+    debts = friction_service.get_summary(db).unsettled_debts
+    assert any(
+        d.borrower_name == "Public Bank" and d.amount_myr == 80000.0 and d.interest_rate_pct == 3.2 and d.tenure_months == 84
+        for d in debts
+    )
+
+    kitchen_service.add_item(
+        db,
+        AddKitchenItemRequest(name="Chicken Thigh", quantity=2, unit="pcs", days_until_expiry=2),
+    )
+    craving_res = assistant_service.ingest_message(
+        db,
+        AssistantIngestRequest(raw_message="I want to eat something crispy", source="whatsapp", sender="Me"),
+    )[0]
+    assert craving_res.category == "question"
+    assert "Chicken Thigh" in craving_res.ai_plan
+    assert "crispy" in craving_res.ai_plan.lower()
+    assert craving_res.whatsapp_reply != ""
+
+
+def test_whatsapp_receipt_image_updates_kitchen_matrix_and_wealth_ledger(monkeypatch):
+    import base64
+    from app.modules.assistant import ai_planner
+    from app.modules.wealth import service as wealth_service
+
+    db = _make_session()
+    monkeypatch.setattr(
+        ai_planner,
+        "extract_receipt_details",
+        lambda b64, mime="image/jpeg": {
+            "is_receipt": True,
+            "merchant": "Jaya Grocer",
+            "date": "2026-11-22",
+            "total_myr": 24.40,
+            "account_name": "Other / Cash",
+            "items": [
+                {"name": "Chicken Breast", "qty": 1, "unit": "pack", "price_myr": 14.50, "is_food": True, "days_until_expiry": 4},
+                {"name": "Dishwashing Liquid", "qty": 1, "unit": "bottle", "price_myr": 9.90, "is_food": False, "days_until_expiry": 0},
+            ],
+        },
+    )
+
+    dummy_img_b64 = base64.b64encode(b"fake-receipt-bytes").decode("ascii")
+    res = assistant_service.ingest_message(
+        db,
+        AssistantIngestRequest(
+            raw_message="",
+            source="whatsapp",
+            sender="Me",
+            image_base64=dummy_img_b64,
+            image_mime="image/jpeg",
+        ),
+    )[0]
+    assert res.status == "done"
+    assert res.routed_to == "wealth_ledger+kitchen"
+    assert "Chicken Breast" in res.whatsapp_reply
+
+    fridge_names = [i.name for i in kitchen_service.list_items(db)]
+    assert any("Chicken Breast" in n for n in fridge_names)
+    assert not any("Dishwashing" in n for n in fridge_names)
+
+    entries = wealth_service.list_entries(db)
+    assert len(entries) == 1
+    assert entries[0].merchant == "Jaya Grocer"
+    assert entries[0].amount_myr == 24.40
+    assert len(entries[0].receipt_items) == 2
+    assert entries[0].added_to_kitchen == ["Chicken Breast"]
 

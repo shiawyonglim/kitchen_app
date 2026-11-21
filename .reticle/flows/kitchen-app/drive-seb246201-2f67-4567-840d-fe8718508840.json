@@ -1,0 +1,210 @@
+{
+  "version": 2,
+  "name": "drive-seb246201-2f67-4567-840d-fe8718508840",
+  "projectId": "kitchen-app",
+  "createdAt": 1795108223138,
+  "steps": [
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "role",
+        "role": "button",
+        "name": "Calendar"
+      },
+      "args": {},
+      "action": "click",
+      "expect": {
+        "kind": "settled"
+      }
+    },
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "role",
+        "role": "button",
+        "name": "Expense 67"
+      },
+      "args": {},
+      "action": "click",
+      "expect": {
+        "kind": "settled"
+      }
+    },
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "role",
+        "role": "textbox",
+        "name": "Search merchant, category, amount..."
+      },
+      "args": {
+        "value": "Grab"
+      },
+      "action": "fill",
+      "expect": {
+        "kind": "settled"
+      }
+    },
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "role",
+        "role": "textbox",
+        "name": "Search merchant, category, amount..."
+      },
+      "args": {},
+      "action": "clear",
+      "expect": {
+        "kind": "settled"
+      }
+    },
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "role",
+        "role": "button",
+        "name": "Chart"
+      },
+      "args": {},
+      "action": "click",
+      "expect": {
+        "kind": "settled"
+      }
+    },
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "role",
+        "role": "button",
+        "name": "Add Add Transaction"
+      },
+      "args": {},
+      "action": "click",
+      "expect": {
+        "kind": "settled"
+      }
+    },
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "role",
+        "role": "button",
+        "name": "Add Add Transaction"
+      },
+      "args": {
+        "text": "Escape"
+      },
+      "action": "press",
+      "expect": {
+        "kind": "settled"
+      }
+    },
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "role",
+        "role": "button",
+        "name": "All 117"
+      },
+      "args": {},
+      "action": "click",
+      "expect": {
+        "kind": "settled"
+      }
+    },
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "role",
+        "role": "button",
+        "name": "Asset Tracker"
+      },
+      "args": {},
+      "action": "click",
+      "expect": {
+        "kind": "settled"
+      }
+    },
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "role",
+        "role": "button",
+        "name": "+ Track Asset"
+      },
+      "args": {},
+      "action": "click",
+      "expect": {
+        "kind": "settled"
+      }
+    },
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "role",
+        "role": "button",
+        "name": "+ Track Asset"
+      },
+      "args": {
+        "text": "Escape"
+      },
+      "action": "press",
+      "expect": {
+        "kind": "settled"
+      }
+    },
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "role",
+        "role": "button",
+        "name": "Kitchen Matrix"
+      },
+      "args": {},
+      "action": "click",
+      "expect": {
+        "kind": "settled"
+      }
+    },
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "role",
+        "role": "button",
+        "name": "Physical Trainer"
+      },
+      "args": {},
+      "action": "click",
+      "expect": {
+        "kind": "settled"
+      }
+    },
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "role",
+        "role": "button",
+        "name": "Friction & Debt"
+      },
+      "args": {},
+      "action": "click",
+      "expect": {
+        "kind": "settled"
+      }
+    },
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "role",
+        "role": "button",
+        "name": "AI Assistant"
+      },
+      "args": {},
+      "action": "click",
+      "expect": {
+        "kind": "settled"
+      }
+    }
+  ],
+  "startPath": "/"
+}

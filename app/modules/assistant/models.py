@@ -27,6 +27,7 @@ class AssistantItem(Base):
     priority: Mapped[str] = mapped_column(String(16), default="normal", nullable=False)
     status: Mapped[str] = mapped_column(String(24), default="pending", nullable=False)
     routed_to: Mapped[str] = mapped_column(String(64), default="", nullable=False)
-    engine: Mapped[str] = mapped_column(String(32), default="heuristic", nullable=False)
+    engine: Mapped[str] = mapped_column(String(48), default="heuristic", nullable=False)
+    cost_tier: Mapped[str] = mapped_column(String(16), default="low_cost", nullable=False)
     attachment_data_url: Mapped[str] = mapped_column(Text, default="", nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, nullable=False)

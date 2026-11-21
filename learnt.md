@@ -16,3 +16,6 @@
 
 
 migration meaning in computer science, a migration means adding columns or rows to the db
+- **Search-Grounded LLM Tool Use**: Passing built-in search tools (`google_search` or `browser_search`) lets the AI model query live web listings, filter outliers, and return structured JSON with source citations instead of maintaining brittle HTML scrapers.
+- **HTTP 503 (Service Unavailable)**: Temporary server-side capacity overload (not your quota like `429` or a bad endpoint like `404`); handled by retrying or falling back to a lighter/alternate model.
+

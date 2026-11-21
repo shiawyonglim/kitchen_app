@@ -3,9 +3,11 @@ from __future__ import annotations
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
+from app.config import settings
+from app.modules.assets.ai_valuator import AIValuationError, AIValuationResult, lookup_asset_valuation
 from app.modules.assets.models import AssetValuation, TrackedAsset
 from app.modules.assets.schemas import AssetOut, CreateAssetRequest, NetWorthSummary, ValuationOut
-from app.modules.assets.scraper import CarousellBlockedError, parse_pasted_listings, scrape_carousell_my
+from app.modules.assets.scraper import parse_pasted_listings
 from app.modules.wealth import service as wealth_service
 
 DEFAULT_ASSETS = [
@@ -41,10 +43,13 @@ def seed_default_assets(db: Session) -> None:
 
 
 def create_asset(db: Session, req: CreateAssetRequest) -> AssetOut:
-    existing = db.scalar(select(TrackedAsset).where(TrackedAsset.name == req.name))
+    data = req.model_dump()
+    data["name"] = data["name"].strip()
+    data["search_query"] = (data.get("search_query") or "").strip() or data["name"]
+    existing = db.scalar(select(TrackedAsset).where(TrackedAsset.name == data["name"]))
     if existing:
-        raise ValueError(f"Asset '{req.name}' already exists.")
-    asset = TrackedAsset(**req.model_dump())
+        raise ValueError(f"Asset '{data['name']}' already exists.")
+    asset = TrackedAsset(**data)
     db.add(asset)
     db.commit()
     db.refresh(asset)
@@ -60,6 +65,30 @@ def delete_asset(db: Session, asset_id: int) -> bool:
     return True
 
 
+def _to_valuation_out(val: AssetValuation) -> ValuationOut:
+    raw = val.raw_listings if isinstance(val.raw_listings, dict) else {}
+    raw_citations = raw.get("citations") if isinstance(raw.get("citations"), list) else []
+    citations = [
+        {"title": str(c.get("title") or ""), "url": str(c.get("url") or "")}
+        for c in raw_citations
+        if isinstance(c, dict) and str(c.get("url") or "").startswith(("http://", "https://"))
+    ]
+    raw_sources = raw.get("source_names") if isinstance(raw.get("source_names"), list) else []
+    source_names = [str(s).strip() for s in raw_sources if str(s).strip()]
+    return ValuationOut(
+        id=val.id,
+        median_price_myr=val.median_price_myr,
+        min_price_myr=val.min_price_myr,
+        max_price_myr=val.max_price_myr,
+        sample_count=val.sample_count,
+        source=val.source,
+        scraped_at=val.scraped_at,
+        summary=str(raw.get("summary") or ""),
+        citations=citations,
+        source_names=source_names,
+    )
+
+
 def _to_asset_out(asset: TrackedAsset) -> AssetOut:
     latest = asset.valuations[0] if asset.valuations else None
     unit_val = latest.median_price_myr if latest else asset.purchase_price_myr
@@ -73,7 +102,7 @@ def _to_asset_out(asset: TrackedAsset) -> AssetOut:
         condition=asset.condition,
         purchase_price_myr=asset.purchase_price_myr,
         quantity=asset.quantity,
-        latest_valuation=ValuationOut.model_validate(latest) if latest else None,
+        latest_valuation=_to_valuation_out(latest) if latest else None,
         total_liquid_value_myr=total_val,
         unrealized_pnl_myr=round(total_val - cost_basis, 2),
     )
@@ -86,37 +115,56 @@ def list_assets(db: Session) -> list[AssetOut]:
     return [_to_asset_out(a) for a in assets]
 
 
-def get_valuation_history(db: Session, asset_id: int) -> list[AssetValuation]:
-    return list(
+def get_valuation_history(db: Session, asset_id: int) -> list[ValuationOut]:
+    rows = list(
         db.scalars(
             select(AssetValuation)
             .where(AssetValuation.asset_id == asset_id)
             .order_by(AssetValuation.scraped_at.asc())
         ).all()
     )
+    return [_to_valuation_out(v) for v in rows]
 
 
-def scrape_asset(db: Session, asset_id: int) -> AssetValuation:
-    asset = db.get(TrackedAsset, asset_id)
-    if not asset:
-        raise ValueError("Asset not found")
-    res = scrape_carousell_my(asset.search_query)
-    val = AssetValuation(
-        asset_id=asset.id,
+def _build_valuation_row(asset_id: int, res: AIValuationResult) -> AssetValuation:
+    return AssetValuation(
+        asset_id=asset_id,
         median_price_myr=res.median_price_myr,
         min_price_myr=res.min_price_myr,
         max_price_myr=res.max_price_myr,
         sample_count=res.sample_count,
         source=res.source,
-        raw_listings={"filtered_prices": res.filtered_prices, "raw_prices": res.raw_prices},
+        raw_listings={
+            "filtered_prices": res.filtered_prices,
+            "raw_prices": res.raw_prices,
+            "summary": res.summary,
+            "citations": res.citations,
+            "source_names": res.source_names,
+        },
     )
+
+
+def refresh_asset(db: Session, asset_id: int) -> ValuationOut:
+    asset = db.get(TrackedAsset, asset_id)
+    if not asset:
+        raise ValueError("Asset not found")
+    res = lookup_asset_valuation(
+        name=asset.name,
+        search_query=asset.search_query,
+        condition=asset.condition,
+        category=asset.category,
+    )
+    val = _build_valuation_row(asset.id, res)
     db.add(val)
     db.commit()
     db.refresh(val)
-    return val
+    return _to_valuation_out(val)
 
 
-def save_pasted_valuation(db: Session, asset_id: int, raw_text: str) -> AssetValuation:
+scrape_asset = refresh_asset
+
+
+def save_pasted_valuation(db: Session, asset_id: int, raw_text: str) -> ValuationOut:
     asset = db.get(TrackedAsset, asset_id)
     if not asset:
         raise ValueError("Asset not found")
@@ -128,19 +176,44 @@ def save_pasted_valuation(db: Session, asset_id: int, raw_text: str) -> AssetVal
         max_price_myr=res.max_price_myr,
         sample_count=res.sample_count,
         source=res.source,
-        raw_listings={"filtered_prices": res.filtered_prices, "raw_prices": res.raw_prices},
+        raw_listings={
+            "filtered_prices": res.filtered_prices,
+            "raw_prices": res.raw_prices,
+            "summary": res.summary,
+            "citations": res.citations,
+            "source_names": res.source_names,
+        },
     )
     db.add(val)
     db.commit()
     db.refresh(val)
-    return val
+    return _to_valuation_out(val)
 
 
-def scrape_all_assets(db: Session) -> list[AssetOut]:
-    assets = list(db.scalars(select(TrackedAsset)).all())
-    for asset in assets:
-        scrape_asset(db, asset.id)
+def refresh_all_assets(db: Session) -> list[AssetOut]:
+    assets = list(db.scalars(select(TrackedAsset).order_by(TrackedAsset.id)).all())
+    if not assets:
+        return []
+    specs = [(a.id, a.name, a.search_query, a.condition, a.category) for a in assets]
+    saved_count = 0
+    errors: list[str] = []
+
+    for aid, name, query, cond, cat in specs:
+        try:
+            res = lookup_asset_valuation(name, query, cond, cat)
+            db.add(_build_valuation_row(aid, res))
+            db.commit()
+            saved_count += 1
+        except Exception as exc:
+            errors.append(str(exc))
+
+    if saved_count == 0 and errors:
+        raise AIValuationError(errors[0])
+
     return list_assets(db)
+
+
+scrape_all_assets = refresh_all_assets
 
 
 def get_net_worth(db: Session) -> NetWorthSummary:
@@ -154,4 +227,3 @@ def get_net_worth(db: Session) -> NetWorthSummary:
         total_net_worth_myr=round(wealth.net_cash_flow_myr + assets_total, 2),
         asset_count=len(assets),
     )
-

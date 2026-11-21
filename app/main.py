@@ -52,7 +52,20 @@ def _ensure_sqlite_columns(bind_engine) -> None:
         "asset_valuations": [("user_id", "INTEGER NOT NULL DEFAULT 1")],
         "odometer_logs": [("user_id", "INTEGER NOT NULL DEFAULT 1")],
         "gear_consumables": [("user_id", "INTEGER NOT NULL DEFAULT 1")],
-        "social_debts": [("user_id", "INTEGER NOT NULL DEFAULT 1")],
+        "social_debts": [
+            ("user_id", "INTEGER NOT NULL DEFAULT 1"),
+            ("direction", "VARCHAR(16) NOT NULL DEFAULT 'owed_to_me'"),
+            ("manual_paid_myr", "FLOAT NOT NULL DEFAULT 0.0"),
+            ("monthly_installment_myr", "FLOAT"),
+            ("match_keywords", "VARCHAR(255) NOT NULL DEFAULT ''"),
+            ("start_date", "DATE"),
+            ("due_day", "INTEGER"),
+            ("match_installment_only", "BOOLEAN NOT NULL DEFAULT 0"),
+            ("excluded_entry_ids", "TEXT NOT NULL DEFAULT ''"),
+            ("interest_rate_pct", "FLOAT NOT NULL DEFAULT 0.0"),
+            ("interest_type", "VARCHAR(16) NOT NULL DEFAULT 'none'"),
+            ("tenure_months", "INTEGER"),
+        ],
         "kitchen_inventory": [
             ("user_id", "INTEGER NOT NULL DEFAULT 1"),
             ("is_staple", "BOOLEAN NOT NULL DEFAULT 0"),
@@ -64,6 +77,7 @@ def _ensure_sqlite_columns(bind_engine) -> None:
         ],
         "assistant_items": [
             ("attachment_data_url", "TEXT NOT NULL DEFAULT ''"),
+            ("cost_tier", "VARCHAR(16) NOT NULL DEFAULT 'low_cost'"),
         ],
         "nutrition_targets": [("user_id", "INTEGER NOT NULL DEFAULT 1")],
         "workout_logs": [("user_id", "INTEGER NOT NULL DEFAULT 1")],
@@ -80,6 +94,7 @@ def _ensure_sqlite_columns(bind_engine) -> None:
             ("live_listener_enabled", "BOOLEAN NOT NULL DEFAULT 1"),
             ("auto_learn_categories", "BOOLEAN NOT NULL DEFAULT 1"),
             ("tng_pdf_password", "VARCHAR(100) NOT NULL DEFAULT ''"),
+            ("visible_tabs", "VARCHAR(255) NOT NULL DEFAULT 'wealth,assets,kitchen,trainer,friction,assistant,resolve'"),
         ],
         "ledger_entries": [
             ("user_id", "INTEGER NOT NULL DEFAULT 1"),

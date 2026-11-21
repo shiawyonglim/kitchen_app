@@ -103,6 +103,8 @@ class LedgerEntryOut(BaseModel):
     suggested_link_amount_myr: float | None = None
     split_count: int | None = None
     owed_remaining_myr: float | None = None
+    receipt_items: list[dict] = Field(default_factory=list)
+    added_to_kitchen: list[str] = Field(default_factory=list)
 
     model_config = {"from_attributes": True}
 

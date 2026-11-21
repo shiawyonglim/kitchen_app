@@ -427,13 +427,27 @@ def auto_profile_unknown_ingredients(db: Session, item_names: list[str]) -> Auto
                 "{sweet, sour, salty, bitter, umami, spicy, richness (0.0-1.0), texture, aroma, cooking_method, notes}. "
                 f"Ingredients: {', '.join(unknown)}"
             )
+            import time as _time
+            from app.modules.settings.ai_usage import record_ai_usage
+
+            t0 = _time.monotonic()
             with httpx.Client(timeout=15.0) as client:
                 resp = client.post(
                     "http://127.0.0.1:11434/api/generate",
                     json={"model": model_name, "prompt": prompt, "format": "json", "stream": False},
                 )
                 if resp.status_code == 200 and resp.json().get("response"):
-                    parsed = json.loads(resp.json()["response"])
+                    rjson = resp.json()
+                    record_ai_usage(
+                        "ollama",
+                        model_name,
+                        "kitchen_taste",
+                        status="ok",
+                        input_tokens=int(rjson.get("prompt_eval_count") or 0),
+                        output_tokens=int(rjson.get("eval_count") or 0),
+                        latency_ms=int((_time.monotonic() - t0) * 1000),
+                    )
+                    parsed = json.loads(rjson["response"])
                     if isinstance(parsed, dict):
                         llm_map = {str(k).lower(): v for k, v in parsed.items() if isinstance(v, dict)}
                         engine_used = "ollama_local"

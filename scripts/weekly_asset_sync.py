@@ -1,4 +1,4 @@
-"""Weekly background script to scrape Carousell and update liquid asset values."""
+"""Weekly background script to refresh liquid asset values via AI Web Search."""
 from __future__ import annotations
 
 import sys
@@ -16,10 +16,10 @@ def main() -> None:
     Base.metadata.create_all(bind=engine)
     with SessionLocal() as db:
         asset_service.seed_default_assets(db)
-        assets = asset_service.scrape_all_assets(db)
+        assets = asset_service.refresh_all_assets(db)
         net = asset_service.get_net_worth(db)
 
-    print("=== Weekly Carousell Asset Sync Complete ===")
+    print("=== Weekly AI Web Search Asset Sync Complete ===")
     for asset in assets:
         val = asset.latest_valuation
         if val:

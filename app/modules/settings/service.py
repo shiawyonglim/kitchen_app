@@ -32,6 +32,10 @@ def update_settings(db: Session, req: UpdateSettingsRequest) -> AppSettings:
     row.account_holder_names = req.account_holder_names.strip()
     if req.tng_pdf_password is not None:
         row.tng_pdf_password = req.tng_pdf_password.strip()
+    if req.visible_tabs is not None:
+        allowed = {"wealth", "assets", "kitchen", "trainer", "friction", "assistant", "resolve"}
+        cleaned = [t.strip().lower() for t in req.visible_tabs.split(",") if t.strip().lower() in allowed]
+        row.visible_tabs = ",".join(dict.fromkeys(cleaned))
     row.updated_at = datetime.now(timezone.utc)
     if row.tng_pdf_password:
         from sqlalchemy import select

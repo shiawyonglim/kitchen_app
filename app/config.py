@@ -29,8 +29,11 @@ class Settings(BaseSettings):
 
     # Personal Assistant AI & WhatsApp Bridge
     gemini_api_key: str = ""
+    gemini_search_model: str = "gemini-3.8-flash"
     groq_api_key: str = ""
     groq_model: str = "qwen/qwen3.8-27b"
+    groq_search_model: str = "openai/gpt-oss-120b"
+    nvidia_api_key: str = ""
     whatsapp_bridge_token: str = ""
     whatsapp_bridge_user_id: int = 1
 
