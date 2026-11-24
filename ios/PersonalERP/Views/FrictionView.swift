@@ -39,7 +39,7 @@ struct FrictionView: View {
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(g.name).font(.subheadline.weight(.medium))
                                     Text("\(Int(g.remaining_units))/\(Int(g.max_units)) \(g.unit) left")
-                                        .font(.caption).foregroundStyle(g.alert ? .orange : .secondary)
+                                        .font(.caption).foregroundStyle(g.alert ? Color.orange : Color.secondary)
                                 }
                                 Spacer()
                                 Button("+1") {

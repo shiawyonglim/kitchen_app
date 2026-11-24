@@ -106,7 +106,7 @@ private struct AssistantItemRow: View {
                 Task { await appState.setAssistantStatus(id: item.id, status: nextStatus) }
             } label: {
                 Image(systemName: item.status == "done" ? "checkmark.circle.fill" : "circle")
-                    .foregroundStyle(item.status == "done" ? .green : .secondary)
+                    .foregroundStyle(item.status == "done" ? Color.green : Color.secondary)
                     .font(.title3)
             }
             .buttonStyle(.plain)

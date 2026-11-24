@@ -45,7 +45,7 @@ struct KitchenView: View {
                         Spacer()
                         Text(item.is_staple ? "Staple" : "\(item.days_remaining)d left")
                             .font(.caption.weight(.semibold))
-                            .foregroundStyle(item.is_expiring_soon ? .orange : .secondary)
+                            .foregroundStyle(item.is_expiring_soon ? Color.orange : Color.secondary)
                     }
                     .swipeActions {
                         Button(role: .destructive) {
@@ -81,7 +81,7 @@ struct KitchenView: View {
                     } label: {
                         HStack {
                             Image(systemName: s.is_checked ? "checkmark.circle.fill" : "circle")
-                                .foregroundStyle(s.is_checked ? .green : .secondary)
+                                .foregroundStyle(s.is_checked ? Color.green : Color.secondary)
                             Text(s.name).strikethrough(s.is_checked).foregroundStyle(.primary)
                         }
                     }

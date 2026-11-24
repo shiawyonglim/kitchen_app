@@ -326,7 +326,7 @@ struct BankBalancesWidgetEntryView: View {
                                 Spacer()
                                 Text(formatRM(a.balance_myr))
                                     .font(.caption2.weight(.semibold).monospacedDigit())
-                                    .foregroundStyle(a.balance_myr >= 0 ? .primary : .red)
+                                    .foregroundStyle(a.balance_myr >= 0 ? Color.primary : Color.red)
                             }
                         }
                         Spacer(minLength: 0)
