@@ -490,9 +490,19 @@ def get_widget_summary(
             "remaining_fixed_bills_myr": round(summary.remaining_fixed_bills_myr, 2),
             "accounts": [
                 {"name": a.name, "balance_myr": round(a.current_balance_myr, 2)}
-                for a in summary.account_balances[:4]
+                for a in summary.account_balances[:6]
             ],
             "recent": recent,
+            "unpaid_bills": [
+                {
+                    "id": b.id,
+                    "name": b.name,
+                    "amount_myr": round(b.amount_myr, 2),
+                    "due_day": b.due_day,
+                }
+                for b in sorted(summary.recurring_bills, key=lambda x: x.due_day)
+                if not b.paid_this_month
+            ][:4],
             "assistant_pending_count": len(pending_tasks),
             "assistant_tasks": [
                 {

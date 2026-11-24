@@ -1618,6 +1618,7 @@ def test_widget_summary_requires_token_and_returns_compact_payload(monkeypatch):
         assert body["recent"][0]["merchant"] == "MIXUE SRI PETALING"
         assert body["assistant_pending_count"] == 0
         assert body["assistant_tasks"] == []
+        assert body["unpaid_bills"] == []
     finally:
         app.dependency_overrides.clear()
 
@@ -1812,6 +1813,282 @@ def test_mobile_login_bearer_auth_works_without_csrf(monkeypatch):
         assert sync_res.status_code == 200
     finally:
         app.dependency_overrides.clear()
+
+
+def test_auto_merge_abbreviated_bank_and_rounded_receipt():
+    from app.modules.wealth.models import DeletionLog, LedgerEntry
+
+    db = _make_session()
+    bank_row = LedgerEntry(
+        idempotency_hash="bank-tfm-1",
+        sender_email="alerts@rytbank.my",
+        merchant="TFM-WCITY@OUG",
+        category="Bank / Retail",
+        tx_type="expense",
+        amount_myr=87.30,
+        occurred_at=datetime(2026, 11, 21, 12, 45, tzinfo=timezone.utc),
+        subject="Card payment completed 👍",
+        account_name="Ryt Bank",
+        raw_payload={"source": "email"},
+    )
+    receipt_row = LedgerEntry(
+        idempotency_hash="rcpt-tfm-1",
+        sender_email="whatsapp_receipt",
+        merchant="The Food Merchant @ W City OUG",
+        category="Food & Beverage",
+        tx_type="expense",
+        amount_myr=87.31,
+        occurred_at=datetime(2026, 11, 21, 0, 0, tzinfo=timezone.utc),
+        subject="Receipt · 10 item(s)",
+        account_name="Unassigned",
+        raw_payload={"source": "whatsapp_receipt", "receipt_items": [{"name": "Salmon", "price_myr": 32.0}]},
+    )
+    unrelated_row = LedgerEntry(
+        idempotency_hash="rcpt-other-1",
+        sender_email="whatsapp_receipt",
+        merchant="Jaya Grocer KL",
+        category="Groceries",
+        tx_type="expense",
+        amount_myr=87.31,
+        occurred_at=datetime(2026, 11, 21, 0, 0, tzinfo=timezone.utc),
+        subject="Receipt · 2 item(s)",
+        account_name="Unassigned",
+        raw_payload={"source": "whatsapp_receipt"},
+    )
+    db.add_all([bank_row, receipt_row, unrelated_row])
+    db.commit()
+
+    removed, updated = service.auto_merge_duplicate_transactions(db)
+    assert removed == 1
+    assert updated == 1
+
+    remaining = service.list_entries(db)
+    assert len(remaining) == 2
+    merged = next(r for r in remaining if r.account_name == "Ryt Bank")
+    assert merged.amount_myr == 87.30
+    assert merged.category == "Food & Beverage"
+    assert "Receipt · 10 item(s)" in merged.subject
+    assert merged.raw_payload.get("receipt_items") == [{"name": "Salmon", "price_myr": 32.0}]
+    assert merged.conflict_resolved is True
+
+    # Unrelated merchant must NOT be merged
+    assert any(r.merchant == "Jaya Grocer KL" for r in remaining)
+    # Audit log recorded for merged duplicate
+    logs = db.query(DeletionLog).all()
+    assert len(logs) == 1
+    assert "Auto-merged duplicate" in logs[0].remark
+
+
+def test_delete_entry_updates_account_balance_income_repayment_expense_and_daily_burn():
+    from app.modules.wealth.models import LedgerEntry
+    from app.modules.wealth.schemas import BankAccountUpsertRequest
+
+    db = _make_session()
+    service.upsert_bank_account(db, BankAccountUpsertRequest(name="Touch 'n Go", opening_balance_myr=100.0))
+
+    income_row = LedgerEntry(
+        idempotency_hash="del-inc-1",
+        sender_email="alerts@tng.my",
+        merchant="Salary Topup",
+        category="Income",
+        tx_type="income",
+        amount_myr=500.0,
+        occurred_at=datetime(2026, 11, 1, 9, 0, tzinfo=timezone.utc),
+        subject="Topup",
+        account_name="Touch 'n Go",
+    )
+    expense_row = LedgerEntry(
+        idempotency_hash="del-exp-1",
+        sender_email="alerts@tng.my",
+        merchant="Dinner",
+        category="Food & Beverage",
+        tx_type="expense",
+        amount_myr=60.0,
+        occurred_at=datetime(2026, 11, 1, 19, 0, tzinfo=timezone.utc),
+        subject="Dinner",
+        account_name="Touch 'n Go",
+    )
+    expense_row_2 = LedgerEntry(
+        idempotency_hash="del-exp-2",
+        sender_email="alerts@tng.my",
+        merchant="Grab",
+        category="Transport",
+        tx_type="expense",
+        amount_myr=40.0,
+        occurred_at=datetime(2026, 11, 2, 10, 0, tzinfo=timezone.utc),
+        subject="Ride",
+        account_name="Touch 'n Go",
+    )
+    db.add_all([income_row, expense_row, expense_row_2])
+    db.commit()
+    db.refresh(expense_row)
+
+    repayment_row = LedgerEntry(
+        idempotency_hash="del-rep-1",
+        sender_email="alerts@tng.my",
+        merchant="Friend Payback",
+        category="Repayment",
+        tx_type="repayment",
+        amount_myr=20.0,
+        occurred_at=datetime(2026, 11, 2, 12, 0, tzinfo=timezone.utc),
+        subject="Payback",
+        account_name="Touch 'n Go",
+        linked_entry_id=expense_row.id,
+    )
+    db.add(repayment_row)
+    db.commit()
+    db.refresh(repayment_row)
+
+    start = date(2026, 11, 1)
+    end = date(2026, 11, 2)
+
+    # Initial: opening 100 + income 500 + repayment 20 - expense (60 + 40) = 520
+    s0 = service.get_summary(db, start, end)
+    tng0 = next(a for a in s0.account_balances if a.name == "Touch 'n Go")
+    assert tng0.current_balance_myr == 520.0
+    assert s0.total_income_myr == 500.0
+    assert s0.total_repayment_myr == 20.0
+    assert s0.total_expense_myr == 80.0  # net: 100 gross - 20 repayment
+    assert s0.period_daily_burn_myr == 40.0  # 80 / 2 days
+
+    # Delete the RM 60 expense: adds RM 60 back to TNG (520 -> 580), clears child linked_entry_id
+    assert service.delete_entry(db, expense_row.id, remark="Duplicate") is True
+    db.refresh(repayment_row)
+    assert repayment_row.linked_entry_id is None
+
+    s1 = service.get_summary(db, start, end)
+    tng1 = next(a for a in s1.account_balances if a.name == "Touch 'n Go")
+    assert tng1.current_balance_myr == 580.0
+    assert s1.total_income_myr == 500.0
+    assert s1.total_repayment_myr == 20.0
+    assert s1.total_expense_myr == 40.0  # repayment unlinked when parent expense deleted, so remaining expense is 40
+    assert s1.period_daily_burn_myr == 20.0  # 40 / 2 days
+
+    # Delete the RM 20 repayment: subtracts RM 20 from TNG (580 -> 560), net expense rises back to RM 40
+    assert service.delete_entry(db, repayment_row.id, remark="Wrong payback") is True
+    s2 = service.get_summary(db, start, end)
+    tng2 = next(a for a in s2.account_balances if a.name == "Touch 'n Go")
+    assert tng2.current_balance_myr == 560.0
+    assert s2.total_repayment_myr == 0.0
+    assert s2.total_expense_myr == 40.0
+    assert s2.period_daily_burn_myr == 20.0
+
+    # Delete the RM 500 income: subtracts RM 500 from TNG (560 -> 60), income drops to 0
+    assert service.delete_entry(db, income_row.id, remark="Test income") is True
+    s3 = service.get_summary(db, start, end)
+    tng3 = next(a for a in s3.account_balances if a.name == "Touch 'n Go")
+    assert tng3.current_balance_myr == 60.0
+    assert s3.total_income_myr == 0.0
+
+
+def test_grab_food_email_parses_items_and_auto_links_with_bank_statement():
+    from app.modules.wealth.email_client import RawEmail
+    from app.modules.wealth.models import LedgerEntry
+    from app.modules.wealth.parser import parse_transaction_email
+
+    raw = RawEmail(
+        message_id="grab-texas-1969",
+        sender_email="no-reply@grab.com",
+        sender_name="Grab",
+        subject="Your Grab E-Receipt",
+        body=(
+            "Hope you enjoyed your food!\n"
+            "TOTAL\nRM 19.69\n"
+            "Vehicle type:\nGrabFood\n"
+            "Order location:\nTexas Chicken - Sg Besi Shell DT\n"
+            "Payment Method: Visa 8052\n"
+            "Description:\nAmount:\n"
+            "1x 3 Pieces Chicken Combo\n"
+            "Original\n"
+            "Honey-Butter Biscuit\n"
+            "Sprite (L)\n"
+            "Flavored Rice\n"
+            "RM 25.99\n"
+            "Subtotal RM 25.99\n"
+            "Delivery fee RM 4.00\n"
+            "TOTAL (INCL. TAX) RM 19.69\n"
+        ),
+        received_at=datetime(2026, 11, 23, 14, 5, tzinfo=timezone.utc),
+    )
+    parsed = parse_transaction_email(raw)
+    assert parsed is not None
+    assert parsed.amount_myr == 19.69
+    assert parsed.category == "Food & Beverage"
+    assert parsed.raw_payload.get("order_location") == "Texas Chicken - Sg Besi Shell DT"
+    items = parsed.raw_payload.get("receipt_items") or []
+    assert len(items) == 1
+    assert items[0]["qty"] == 1
+    assert "3 Pieces Chicken Combo" in items[0]["name"]
+    assert items[0]["price_myr"] == 25.99
+
+    db = _make_session()
+    grab_row = LedgerEntry(
+        idempotency_hash=parsed.idempotency_hash,
+        sender_email=parsed.sender_email,
+        merchant=parsed.merchant,
+        category=parsed.category,
+        tx_type=parsed.tx_type,
+        amount_myr=parsed.amount_myr,
+        occurred_at=raw.received_at,
+        subject=parsed.subject,
+        account_name="Unassigned",
+        raw_payload=parsed.raw_payload,
+    )
+    tng_row = LedgerEntry(
+        idempotency_hash="tng-grab-1969",
+        sender_email="statement@touch'ngo",
+        merchant="Payment - Grab* A-A4856GBGXE7KAV",
+        category="Bank / Retail",
+        tx_type="expense",
+        amount_myr=19.69,
+        occurred_at=datetime(2026, 11, 23, 0, 0, tzinfo=timezone.utc),
+        subject="[Touch 'n Go Statement] Payment - Grab* A-A4856GBGXE7KAV",
+        account_name="Touch 'n Go",
+    )
+    db.add_all([grab_row, tng_row])
+    db.commit()
+
+    removed, updated = service.auto_merge_duplicate_transactions(db)
+    assert removed == 1
+    assert updated == 1
+
+    entries = service.list_entries(db)
+    assert len(entries) == 1
+    merged = entries[0]
+    assert merged.account_name == "Touch 'n Go"
+    assert merged.category == "Food & Beverage"
+    assert len(merged.receipt_items) == 1
+    assert "3 Pieces Chicken Combo" in merged.receipt_items[0]["name"]
+    assert "Texas Chicken - Sg Besi Shell DT" in merged.subject
+
+    # Logging GrabFood items into Calorie Ledger (idempotent)
+    from app.modules.calories import service as calories_service
+    from app.modules.calories.models import CalorieEntry
+
+    Base.metadata.create_all(bind=db.get_bind())
+
+    cal_logged = calories_service.log_grab_food_items(
+        db,
+        merged.receipt_items,
+        eaten_at=raw.received_at,
+        restaurant="Texas Chicken - Sg Besi Shell DT",
+    )
+    assert len(cal_logged) == 1
+    assert "3 Pieces Chicken Combo" in cal_logged[0].food_name
+    assert cal_logged[0].calories > 0
+    assert cal_logged[0].meal_type == "dinner"  # 14:05 UTC == 22:05 MYT
+    assert cal_logged[0].source in ("grab_receipt", "grab_ddgs", "grab_kb")
+
+    # Calling again with the same eaten_at window must not duplicate
+    cal_again = calories_service.log_grab_food_items(
+        db,
+        merged.receipt_items,
+        eaten_at=raw.received_at,
+        restaurant="Texas Chicken - Sg Besi Shell DT",
+    )
+    assert cal_again == []
+    assert db.query(CalorieEntry).count() == 1
+
 
 
 

@@ -246,9 +246,13 @@ struct MainTabView: View {
                     .tabItem { Label("Assistant", systemImage: "sparkles") }
                     .tag(2)
 
+                ModulesHubView()
+                    .tabItem { Label("Modules", systemImage: "square.grid.2x2.fill") }
+                    .tag(3)
+
                 SettingsView()
                     .tabItem { Label("Settings", systemImage: "gearshape.fill") }
-                    .tag(3)
+                    .tag(4)
             }
             .tint(Color(red: 0.51, green: 0.55, blue: 0.97))
 
@@ -272,6 +276,39 @@ struct MainTabView: View {
         .sheet(isPresented: $showQuickAdd) {
             AddTransactionSheet()
                 .environmentObject(appState)
+        }
+    }
+}
+
+struct MonthMenuPicker: View {
+    @EnvironmentObject private var appState: AppState
+
+    var body: some View {
+        Menu {
+            Button {
+                Task { await appState.selectMonth("") }
+            } label: {
+                Label("All Months", systemImage: appState.selectedMonth.isEmpty ? "checkmark" : "calendar")
+            }
+            ForEach(appState.availableMonths, id: \.self) { m in
+                Button {
+                    Task { await appState.selectMonth(m) }
+                } label: {
+                    if appState.selectedMonth == m {
+                        Label(m, systemImage: "checkmark")
+                    } else {
+                        Text(m)
+                    }
+                }
+            }
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: "calendar")
+                Text(appState.selectedMonth.isEmpty ? "All Months" : appState.selectedMonth)
+                    .fontWeight(.medium)
+                Image(systemName: "chevron.down")
+                    .font(.caption2)
+            }
         }
     }
 }

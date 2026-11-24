@@ -115,32 +115,7 @@ struct TransactionsView: View {
             .navigationTitle("Transactions")
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Menu {
-                        Button {
-                            Task { await appState.selectMonth("") }
-                        } label: {
-                            Label("All Months", systemImage: appState.selectedMonth.isEmpty ? "checkmark" : "calendar")
-                        }
-                        ForEach(appState.availableMonths, id: \.self) { m in
-                            Button {
-                                Task { await appState.selectMonth(m) }
-                            } label: {
-                                if appState.selectedMonth == m {
-                                    Label(m, systemImage: "checkmark")
-                                } else {
-                                    Text(m)
-                                }
-                            }
-                        }
-                    } label: {
-                        HStack(spacing: 4) {
-                            Image(systemName: "calendar")
-                            Text(appState.selectedMonth.isEmpty ? "All Months" : appState.selectedMonth)
-                                .fontWeight(.medium)
-                            Image(systemName: "chevron.down")
-                                .font(.caption2)
-                        }
-                    }
+                    MonthMenuPicker()
                 }
             }
             .sheet(item: $editingEntry) { entry in

@@ -65,6 +65,13 @@ struct WidgetAssistantTask: Codable, Identifiable {
     let scheduled_for: String
 }
 
+struct WidgetBillItem: Codable, Identifiable {
+    let id: Int
+    let name: String
+    let amount_myr: Double
+    let due_day: Int
+}
+
 struct WidgetSummary: Codable {
     let month: String
     let today: String
@@ -80,6 +87,7 @@ struct WidgetSummary: Codable {
     let remaining_fixed_bills_myr: Double
     let accounts: [WidgetAccountBalance]
     let recent: [WidgetRecentTx]
+    let unpaid_bills: [WidgetBillItem]?
     let assistant_pending_count: Int?
     let assistant_tasks: [WidgetAssistantTask]?
     let updated_at: String
